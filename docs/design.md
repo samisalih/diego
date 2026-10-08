@@ -14,9 +14,15 @@ Core principle of the brief: *the UI steps back, the colour belongs to the apart
 - Night Signal applies to the **UI chrome**: toolbar, side panel (tree + inspector), time bar,
   library bar, workshop chrome, documents view, dialogs, toasts, forms. Tokens, fonts, panels, chips,
   focus rings and neon states come from Night Signal.
-- **Nothing sits on top of the 3D viewport.** No grain, scanlines, VHS streaks, vignette or backdrop
+- **No effects on top of the 3D viewport.** No grain, scanlines, VHS streaks, vignette or backdrop
   glow over the scene; the rendered apartment stays colour-true. This overrides Night Signal §1.2.3 and
   §5 ("texture is always on") for the viewport.
+- **Floating tool chrome (decided 2026-10-08).** The 3D viewport fills the whole window; the tool chrome
+  floats above it as opaque, rounded panels with a small gap to the window edge (like a design tool):
+  left panel (brand, document, tree), right panel (inspector), a toolbar pill centred at the top, and
+  toasts as a pill below the toolbar. Panels are solid Night Signal surfaces (no transparency that tints
+  the scene, no blur of the scene behind them); the scene stays untouched between them. Scene
+  annotations (selection outline, measurement lines and labels) remain part of the 3D scene.
 - Texture layers (grain, scanlines, vignette) may be used on **non-3D surfaces** only (e.g. the
   documents overview background, empty states), at the low opacities from §5.
 - Film grain and vignette over the scene exist only as the optional **mood layer** (`<MoodLayer />`),
@@ -25,8 +31,9 @@ Core principle of the brief: *the UI steps back, the colour belongs to the apart
   (§4.2), HUD corners (§6.7), spin-blur page transitions (§8.3), glitch effects (§8.4) and the
   illustration characters (§7) are **not** used in the editor and workshop. They may appear sparingly
   in the documents view header and in empty states.
-- Panels are compact: `--radius-sm` for inner elements, `--radius` only for floating panels; the side
-  panel and bars are flat ink surfaces with a hairline edge.
+- Panels are compact: `--radius-sm` for inner elements, `--radius` for the floating panels and the
+  toolbar pill; floating panels use the Night Signal panel surface (§6.3) with hairline edge and
+  `--shadow`. Dark is the colour world (decided 2026-10-08).
 - Motion in the tool UI: short `rise`/`pop` easings, 150–250 ms. No slam, shake or flash.
 - Fonts are self-hosted (`apps/web/src/assets/fonts/`), never loaded from Google Fonts at runtime — the
   app must work offline and inside Electron.

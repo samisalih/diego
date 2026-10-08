@@ -158,8 +158,14 @@ overview is a small dialog listing every shortcut (Night Signal panel, closes wi
 
 ## 4. Side panel, toolbar, chips (`apps/web/src/editor/`)
 
-Layout: top bar (existing) → toolbar row → main area = viewport (left, flexible) + side panel (right,
-320 px, flat ink surface with a hairline left edge, scrolls independently). Nothing over the canvas.
+Layout (design.md §A "Floating tool chrome"): the viewport fills the whole window. Floating above it,
+12–16 px from the window edges: a **left panel** (~280 px: frog + "Diego", sign-out in a small menu,
+document name, tree), a **right panel** (~320 px: inspector), a **toolbar pill** centred at the top, and
+toasts as a pill under the toolbar. Panels scroll internally and never exceed the window height; on
+windows narrower than 1100 px the panels can be collapsed to icon buttons. Pointer events on panels never
+reach the canvas (no picking/orbit through a panel); the canvas keeps its full size so the camera framing
+accounts for the panels (dollhouse framing centres the apartment in the free area between the panels).
+The phase b top bar and error strip move into the left panel (error as a red-edged panel block).
 
 ### 4.1 Toolbar
 Undo, Redo (disabled from history state), Duplicate, Delete, Lock, Hide (disabled without selection),
