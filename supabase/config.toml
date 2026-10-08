@@ -1,0 +1,15 @@
+# Minimal Supabase CLI config for the hosted-project workflow (migrations + functions deploy).
+project_id = "apartment-planner"
+
+[auth]
+# Single-user app: the owner account is created manually, public sign-ups stay off.
+enable_signup = false
+
+[auth.oauth_server]
+# Supabase acts as OAuth server so claude.ai can connect to the MCP server.
+enabled = true
+allow_dynamic_registration = true
+
+[functions.mcp]
+# The MCP function validates the OAuth access token itself.
+verify_jwt = false
