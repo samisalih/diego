@@ -154,6 +154,13 @@ renderer objects in builders unless stated.
   start. `buildWallGeometry` therefore takes the full wall list: `buildWallGeometry(wall, walls,
   openings, ceilingHeight)`.
 
+- Known limits, deferred to phase c (when the editor allows free wall thickness): the "half of its own
+  thickness" rule only closes corners cleanly for walls of equal thickness (a thicker wall overhangs a
+  thinner one by `(tA − tB)/2`; an interior wall thicker than the outer wall would poke through), and
+  extended ends leave coplanar end caps/top faces against the joined wall (z-fighting once adjacent walls
+  get different materials). Fix then: extend by half the *other* wall's thickness at L-joints, clamp to
+  `min(own, other)/2` at T-joints, and drop or inset end caps at joined ends.
+
 ### 4.2 Floors and ceilings — `rooms.ts`
 - `buildFloorGeometry(room)` → flat polygon at `y = 0`, normal `+y`, UVs = world `(x, z)` in metres.
 - `buildCeilingGeometry(room, ceilingHeight)` → same polygon at `y = ceilingHeight`, normal `−y`.
