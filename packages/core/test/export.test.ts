@@ -77,6 +77,13 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+// Indexed access that fails loudly instead of yielding undefined (noUncheckedIndexedAccess).
+function at<T>(list: readonly T[], index: number): T {
+  const entry = list[index];
+  if (entry === undefined) throw new Error(`expected an entry at index ${index}`);
+  return entry;
+}
+
 function idsOf(list: { id: string }[]) {
   return list.map((entry) => entry.id).sort();
 }
@@ -244,9 +251,9 @@ describe("parseImport", () => {
     const text = '{\n  "format": "apartment-planner",\n  oops\n}';
     const issues = failedIssues(parseImport(text));
     expect(issues.length).toBeGreaterThan(0);
-    expect(typeof issues[0].field).toBe("string");
-    expect(issues[0].line).toBe(3);
-    expect(issues[0].message.length).toBeGreaterThan(0);
+    expect(typeof at(issues, 0).field).toBe("string");
+    expect(at(issues, 0).line).toBe(3);
+    expect(at(issues, 0).message.length).toBeGreaterThan(0);
   });
 
   // Red when TOON syntax errors lose the decoder's line information.
@@ -254,8 +261,18 @@ describe("parseImport", () => {
     const text = "format: apartment-planner\nversion: 1\nx:\n    y: 1\n  z: 2";
     const issues = failedIssues(parseImport(text));
     expect(issues.length).toBeGreaterThan(0);
-    expect(typeof issues[0].field).toBe("string");
-    expect(issues[0].line).toBe(4);
+    expect(typeof at(issues, 0).field).toBe("string");
+    expect(at(issues, 0).line).toBe(4);
+  });
+
+  // Red when the line refers to the extracted payload instead of the original text
+  // (prose and fence lines before the payload must be counted).
+  it("reports syntax error lines relative to the original text, including prose and fence lines", () => {
+    const payload = "x:\n    y: 1\n  z: 2";
+    // Original: line 1 prose, line 2 fence, payload line 1 = original 3, error on payload line 2 = original 4.
+    const text = "Here is your export:\n```toon\n" + payload + "\n```\n";
+    const issues = failedIssues(parseImport(text));
+    expect(at(issues, 0).line).toBe(4);
   });
 
   // Red when garbage input throws instead of returning issues.
@@ -302,7 +319,7 @@ describe("parseImport", () => {
   // Red when cross-field rules (opening must reference an existing wall) are skipped on import.
   it("applies the apartment cross-field rules", () => {
     const bundle = buildBundleFromPool();
-    bundle.document.apartment.openings[0].wallId = "wall_missing";
+    at(bundle.document.apartment.openings, 0).wallId = "wall_missing";
     const issues = failedIssues(parseImport(JSON.stringify(bundle)));
     expect(issues.map((i) => i.field)).toContain("document.apartment.openings.opening_window.wallId");
   });
@@ -311,7 +328,7 @@ describe("parseImport", () => {
   it("reports all violations, not only the first", () => {
     const bundle = buildBundleFromPool();
     bundle.document.apartment.meta.ceilingHeight = 9;
-    bundle.materials[0].tileSize = -1;
+    at(bundle.materials, 0).tileSize = -1;
     const issues = failedIssues(parseImport(JSON.stringify(bundle)));
     expect(issues.length).toBeGreaterThanOrEqual(2);
     for (const issue of issues) {
@@ -365,7 +382,7 @@ describe("planImport", () => {
     const plan = planImport(bundle, { ...emptyExisting(), materials: [existingOak] } as never);
     expect(plan.materials.reuse).toEqual({ mat_oak: "mat_existing_oak" });
     expect(plan.materials.create.map((m) => m.id)).not.toContain("mat_oak");
-    expect(plan.content.apartment.rooms[0].floorMaterialId).toBe("mat_existing_oak");
+    expect(at(plan.content.apartment.rooms, 0).floorMaterialId).toBe("mat_existing_oak");
   });
 
   // Red when the hash depends on key order.
@@ -387,7 +404,7 @@ describe("planImport", () => {
     expect(created?.id).toMatch(FRESH_ID("mat"));
     expect(created?.fallbackColor).toBe("#a0784c");
     expect(plan.materials.reuse).not.toHaveProperty("mat_oak");
-    expect(plan.content.apartment.rooms[0].floorMaterialId).toBe(created?.id);
+    expect(at(plan.content.apartment.rooms, 0).floorMaterialId).toBe(created?.id);
     expect(existing).toEqual(existingSnapshot);
   });
 
@@ -413,8 +430,8 @@ describe("planImport", () => {
       ...plan.materials.create.map((m) => m.id),
     ];
     expect(new Set(newIds).size).toBe(newIds.length);
-    expect(plan.assets.create[0].id).toMatch(FRESH_ID("asset"));
-    expect(plan.models.create[0].id).toMatch(FRESH_ID("model"));
+    expect(at(plan.assets.create, 0).id).toMatch(FRESH_ID("asset"));
+    expect(at(plan.models.create, 0).id).toMatch(FRESH_ID("model"));
     for (const material of plan.materials.create) expect(material.id).toMatch(FRESH_ID("mat"));
     // Fresh ids must not collide with the ids of the bundle.
     expect(newIds).not.toContain("asset_sofa");
@@ -426,7 +443,7 @@ describe("planImport", () => {
   it("rewrites item asset references to the created asset id", () => {
     const bundle = buildBundleFromPool();
     const plan = planImport(bundle, emptyExisting() as never);
-    expect(plan.content.items[0].assetId).toBe(plan.assets.create[0].id);
+    expect(at(plan.content.items, 0).assetId).toBe(at(plan.assets.create, 0).id);
   });
 
   // Red when item asset references are rewritten for reused assets incorrectly (reuse under another id).
@@ -440,7 +457,7 @@ describe("planImport", () => {
     } as never);
     expect(plan.assets.reuse).toEqual({ asset_sofa: "asset_existing_sofa" });
     expect(plan.assets.create).toEqual([]);
-    expect(plan.content.items[0].assetId).toBe("asset_existing_sofa");
+    expect(at(plan.content.items, 0).assetId).toBe("asset_existing_sofa");
   });
 
   // Red when chained references are not resolved: a new material used by a new asset must carry its
@@ -458,15 +475,15 @@ describe("planImport", () => {
     const wall = newMaterialIdFor("Material mat_wall");
     const frame = newMaterialIdFor("Material mat_frame");
     const leg = newMaterialIdFor("Material mat_leg");
-    const vase = plan.models.create[0].id;
+    const vase = at(plan.models.create, 0).id;
 
     const { rooms, openings } = plan.content.apartment;
-    expect(rooms[0].floorMaterialId).toBe(oak);
-    expect(rooms[0].wallMaterialId).toBeNull();
-    expect(rooms[1].wallMaterialId).toBe(wall);
-    expect(openings[0].frameMaterialId).toBe(frame);
+    expect(at(rooms, 0).floorMaterialId).toBe(oak);
+    expect(at(rooms, 0).wallMaterialId).toBeNull();
+    expect(at(rooms, 1).wallMaterialId).toBe(wall);
+    expect(at(openings, 0).frameMaterialId).toBe(frame);
 
-    const asset = plan.assets.create[0];
+    const asset = at(plan.assets.create, 0);
     const parts = asset.parts as unknown as Record<string, unknown>[];
     expect(parts.find((p) => p.id === "part_seat")?.materialId).toBe(oak);
     expect(parts.find((p) => p.id === "part_leg")?.materialId).toBe(leg);
@@ -482,9 +499,9 @@ describe("planImport", () => {
   it("leaves absent and null references untouched", () => {
     const bundle = buildBundleFromPool();
     const plan = planImport(bundle, emptyExisting() as never);
-    const parts = plan.assets.create[0].parts as unknown as Record<string, unknown>[];
+    const parts = at(plan.assets.create, 0).parts as unknown as Record<string, unknown>[];
     expect(parts.find((p) => p.id === "part_seat")?.modelId).toBeUndefined();
-    expect(plan.content.apartment.rooms[1].floorMaterialId ?? null).toBeNull();
+    expect(at(plan.content.apartment.rooms, 1).floorMaterialId ?? null).toBeNull();
   });
 
   // Red when a changed asset is matched by id and reused, or when the existing asset is modified.
@@ -499,10 +516,10 @@ describe("planImport", () => {
     const snapshot = clone(existing);
     const plan = planImport(bundle, existing as never);
     expect(plan.assets.create).toHaveLength(1);
-    expect(plan.assets.create[0].id).toMatch(FRESH_ID("asset"));
-    expect(plan.assets.create[0].name).toBe("Sofa");
+    expect(at(plan.assets.create, 0).id).toMatch(FRESH_ID("asset"));
+    expect(at(plan.assets.create, 0).name).toBe("Sofa");
     expect(plan.assets.reuse).toEqual({});
-    expect(plan.content.items[0].assetId).toBe(plan.assets.create[0].id);
+    expect(at(plan.content.items, 0).assetId).toBe(at(plan.assets.create, 0).id);
     expect(existing).toEqual(snapshot);
   });
 
@@ -535,7 +552,7 @@ describe("planImport", () => {
     const plan = planImport(bundle, { ...emptyExisting(), models: [existingModel] } as never);
     expect(plan.models.reuse).toEqual({ model_vase: "model_existing_vase" });
     expect(plan.models.create).toEqual([]);
-    const parts = plan.assets.create[0].parts as unknown as Record<string, unknown>[];
+    const parts = at(plan.assets.create, 0).parts as unknown as Record<string, unknown>[];
     expect(parts.find((p) => p.id === "part_vase")?.modelId).toBe("model_existing_vase");
   });
 });

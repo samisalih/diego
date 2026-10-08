@@ -6,7 +6,7 @@ import type { DocumentContent } from "../schemas/document.ts";
 import { exportBundleSchema, type ExportBundle } from "../schemas/export.ts";
 import type { Material } from "../schemas/material.ts";
 import type { Model } from "../schemas/model.ts";
-import { decodeToon, detectFormat, extractPayload, type TextFormat } from "../toon.ts";
+import { decodeToon, detectFormat, locatePayload, type TextFormat } from "../toon.ts";
 import { toValidationIssues, type Result, type ValidationIssue } from "../validation.ts";
 import type { EntityPool } from "./bundle.ts";
 
@@ -80,11 +80,15 @@ function parseToon(payload: string): Result<unknown> {
   }
 }
 
+function shiftLine(issue: ImportIssue, lineOffset: number): ImportIssue {
+  return issue.line === undefined ? issue : { ...issue, line: issue.line + lineOffset };
+}
+
 export function parseImport(text: string, format: TextFormat = detectFormat(text)): Result<ExportBundle> {
-  const payload = extractPayload(text);
+  const { payload, lineOffset } = locatePayload(text);
   if (payload === "") return syntaxFailure("Empty input", "a JSON or TOON export bundle", 1);
   const parsed = format === "toon" ? parseToon(payload) : parseJson(payload);
-  if (!parsed.ok) return parsed;
+  if (!parsed.ok) return { ok: false, issues: parsed.issues.map((issue) => shiftLine(issue, lineOffset)) };
   const validated = exportBundleSchema.safeParse(parsed.value);
   if (validated.success) return { ok: true, value: validated.data };
   const issues = toValidationIssues(validated.error, parsed.value).map((issue) => ({

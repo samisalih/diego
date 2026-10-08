@@ -240,7 +240,7 @@ Flat and uniform on purpose (TOON tabular). Hidden items are ignored. Items whos
 `unknownAsset`.
 - `collision`: item–item OBB intersection (subject/object = item ids, sorted), item–wall intersection
   (object = wall id) — except where the item overlaps only an opening's span of that wall.
-- `narrowPassage`: two obstacles (items or walls) whose distance is ≥ 0.3 and < 0.8 m and whose facing
+- `narrowPassage`: two obstacles (item–item or item–wall; wall–wall pairs are skipped) whose distance is ≥ 0.3 and < 0.8 m and whose facing
   sides overlap by at least 0.3 m along the gap; `value` = gap width in metres.
 - `blockedOpening`: an item intersects the clearance zone of an opening. Doors/balcony doors: rectangle
   of opening width × 0.8 m depth on each side of the wall (only the room side for exterior walls).
