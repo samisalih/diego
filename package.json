@@ -8,9 +8,11 @@
     "build": "pnpm --filter web build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "functions:bundle": "node scripts/bundle-functions.mjs"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
     "typescript": "7.0.2",
     "vitest": "5.0.3"
   }
