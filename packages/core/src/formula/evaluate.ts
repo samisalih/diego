@@ -1,4 +1,4 @@
-import { type FormulaError, FormulaException, type FormulaNode, parseFormula } from "./parser.ts";
+import { type FormulaError, FormulaException, type FormulaNode, MAX_FORMULA_LENGTH, parseFormula } from "./parser.ts";
 
 export type Scope = Record<string, number>;
 export type EvaluateResult = { ok: true; value: number } | { ok: false; error: FormulaError };
@@ -113,7 +113,7 @@ export function evaluateFormula(source: string, scope: Scope): EvaluateResult {
   }
 }
 
-export const MAX_FORMULA_LENGTH = 500;
+export { MAX_FORMULA_LENGTH };
 
 export function resolveNumber(value: number | string, scope: Scope): EvaluateResult {
   if (typeof value === "number") return { ok: true, value };

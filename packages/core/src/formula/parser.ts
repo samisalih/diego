@@ -78,6 +78,7 @@ const BINARY_BINDING: Record<string, { power: number; rightAssociative: boolean 
 };
 const UNARY_POWER = 4;
 const MAX_NESTING_DEPTH = 64;
+export const MAX_FORMULA_LENGTH = 500;
 
 class Parser {
   private index = 0;
@@ -145,7 +146,9 @@ class Parser {
   private parsePrefix(): FormulaNode {
     const token = this.next();
     if (token.kind === "number") {
-      return { type: "number", value: Number(token.text), position: token.position };
+      const value = Number(token.text);
+      if (!Number.isFinite(value)) throw new FormulaException("number literal is not finite", token.position);
+      return { type: "number", value, position: token.position };
     }
     if (token.kind === "identifier") return this.parseIdentifierOrCall(token);
     if (this.isOperator(token, "-") || this.isOperator(token, "+")) {
@@ -185,6 +188,9 @@ class Parser {
 
 export function parseFormula(source: string): ParseResult {
   try {
+    if (source.length > MAX_FORMULA_LENGTH) {
+      throw new FormulaException(`formula is too long (max ${MAX_FORMULA_LENGTH} characters)`, 0);
+    }
     const parser = new Parser(tokenize(source));
     const ast = parser.parseAll();
     return { ok: true, ast, identifiers: parser.identifiers };
