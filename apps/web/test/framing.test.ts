@@ -29,7 +29,7 @@ describe("apartmentBounds", () => {
 
   // Red if the centre is not the midpoint of min and max.
   it("has its centre in the middle of the box", () => {
-    bounds.center.forEach((value, i) => expect(value).toBeCloseTo((bounds.min[i] + bounds.max[i]) / 2, 6));
+    bounds.center.forEach((value, i) => expect(value).toBeCloseTo((bounds.min[i]! + bounds.max[i]!) / 2, 6));
   });
 
   // Red if the radius does not enclose the box or is far too large.
@@ -75,7 +75,7 @@ describe("dollhouseCamera", () => {
 
   // Red if the camera looks anywhere but at the centre.
   it("looks at the centre of the bounds", () => {
-    camera.target.forEach((value, i) => expect(value).toBeCloseTo(bounds.center[i], 5));
+    camera.target.forEach((value, i) => expect(value).toBeCloseTo(bounds.center[i]!, 5));
   });
 
   // Red if the camera sits north/west or below: south is +z, east is +x for northAngle 0 plans.

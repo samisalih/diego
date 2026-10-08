@@ -83,7 +83,7 @@ describe("buildOpeningFixtures", () => {
     // Red if the bars overlap the glass area, i.e. if the bar union is not a ring around the inner area.
     it("fits the glass pane inside the frame, 0.01 m thick, centred in the wall", () => {
       const hole = holeBox(wall, opening);
-      const pane = worldBox(glass(fixtures)[0]);
+      const pane = worldBox(glass(fixtures)[0]!);
       expect(pane.min.x).toBeCloseTo(hole.min.x + FRAME_BAR, 5);
       expect(pane.max.x).toBeCloseTo(hole.max.x - FRAME_BAR, 5);
       expect(pane.min.y).toBeCloseTo(hole.min.y + FRAME_BAR, 5);
@@ -94,7 +94,7 @@ describe("buildOpeningFixtures", () => {
 
     // Red if the pane is not a single local-space box with the thickness on the depth axis.
     it("reports the glass thickness as the depth component", () => {
-      expect(glass(fixtures)[0].size[2]).toBeCloseTo(GLASS_THICKNESS, 6);
+      expect(glass(fixtures)[0]!.size[2]).toBeCloseTo(GLASS_THICKNESS, 6);
     });
   });
 
@@ -118,7 +118,7 @@ describe("buildOpeningFixtures", () => {
     // Red if the glass is rotated differently than the frame.
     it("rotates the glass like the frame", () => {
       const hole = holeBox(wall, opening);
-      const pane = worldBox(glass(fixtures)[0]);
+      const pane = worldBox(glass(fixtures)[0]!);
       expect(pane.min.z).toBeCloseTo(hole.min.z + FRAME_BAR, 5);
       expect(pane.max.z).toBeCloseTo(hole.max.z - FRAME_BAR, 5);
       expect(pane.max.x - pane.min.x).toBeCloseTo(GLASS_THICKNESS, 6);

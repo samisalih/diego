@@ -140,7 +140,7 @@ describe("exposureForSun", () => {
   // Red if a brighter sun ever gets more exposure than a dimmer one.
   it("never increases with the sun altitude", () => {
     for (let i = 1; i < altitudes.length; i += 1) {
-      expect(exposureForSun(altitudes[i]), `${altitudes[i - 1]} -> ${altitudes[i]}`).toBeLessThanOrEqual(exposureForSun(altitudes[i - 1]) + 1e-12);
+      expect(exposureForSun(altitudes[i]!), `${altitudes[i - 1]} -> ${altitudes[i]}`).toBeLessThanOrEqual(exposureForSun(altitudes[i - 1]!) + 1e-12);
     }
   });
 
