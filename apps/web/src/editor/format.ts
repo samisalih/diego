@@ -3,7 +3,9 @@ import { de } from "../i18n/de.ts";
 
 /** A number in German notation with at most `digits` decimals. */
 export function formatNumber(value: number, digits = 1): string {
-  return value.toLocaleString("de-DE", { maximumFractionDigits: digits });
+  const text = value.toLocaleString("de-DE", { maximumFractionDigits: digits });
+  // A tiny negative value rounds to "-0".
+  return text === "-0" ? "0" : text;
 }
 
 export function currentPlatform(): Platform {

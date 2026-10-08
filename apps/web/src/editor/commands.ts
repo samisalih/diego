@@ -17,7 +17,7 @@ export type EditorCommands = {
   redo: () => Promise<void>;
 };
 
-const LOCKED_ISSUE_PATTERN = /locked/i;
+const LOCKED_ISSUE_PATTERN = /\blocked\b/i;
 
 const FAILURE_MESSAGES: Record<Failure["reason"], string> = {
   conflict: de.toasts.conflict,
