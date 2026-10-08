@@ -31,6 +31,20 @@ function SceneOrMessage({ onRetry }: { onRetry?: () => void }) {
   return <ViewportMessage title={de.app.loading} />;
 }
 
+/** Load error above the viewport (never over the canvas) while a cached scene is still shown. */
+function ErrorStrip({ onRetry }: { onRetry?: () => void }) {
+  const hasDocument = useSceneStore((state) => state.document !== null);
+  const status = useSceneStore((state) => state.status);
+  const error = useSceneStore((state) => state.error);
+  if (!hasDocument || status !== "error") return null;
+  return (
+    <div className="error-strip" role="alert">
+      <span>{error ?? de.data.loadFailed}</span>
+      {onRetry && <button className="button" type="button" onClick={onRetry}>{de.data.retry}</button>}
+    </div>
+  );
+}
+
 /** The editor chrome (a flat top bar) around the viewport; `canSignOut` is false in fixture mode. */
 export function Editor({ canSignOut, onRetry }: { canSignOut: boolean; onRetry?: () => void }) {
   return (
@@ -42,6 +56,7 @@ export function Editor({ canSignOut, onRetry }: { canSignOut: boolean; onRetry?:
         </div>
         {canSignOut && <button className="button" type="button" onClick={() => void signOut()}>{de.auth.signOut}</button>}
       </header>
+      <ErrorStrip onRetry={onRetry} />
       <div className="viewport">
         <SceneOrMessage onRetry={onRetry} />
       </div>

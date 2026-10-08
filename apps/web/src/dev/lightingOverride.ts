@@ -1,4 +1,4 @@
-import type { Lighting } from "@app/core";
+import { SEASONS, type Lighting } from "@app/core";
 
 /**
  * Dev only: `&time=22` and `&season=winter` in the hash route override the document's lighting so
@@ -8,7 +8,8 @@ export function withDevLightingOverride(lighting: Lighting | undefined): Lightin
   if (!import.meta.env.DEV || !lighting) return lighting;
   const params = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
   const time = Number(params.get("time"));
-  const season = params.get("season") as Lighting["season"] | null;
+  const requestedSeason = params.get("season");
+  const season = SEASONS.find((candidate) => candidate === requestedSeason);
   return {
     ...lighting,
     ...(params.has("time") && Number.isFinite(time) ? { time } : {}),

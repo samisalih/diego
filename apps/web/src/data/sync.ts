@@ -45,20 +45,26 @@ export function mergeLoadResult(loaded: SceneData, buffered: TableChange[]): { s
   let state = loaded;
   let needsDocumentReload = false;
   for (const tableChange of buffered) {
-    const result = applyTableChange(state, tableChange);
-    state = result.state;
-    needsDocumentReload ||= result.needsDocumentReload;
+    try {
+      const result = applyTableChange(state, tableChange);
+      state = result.state;
+      needsDocumentReload ||= result.needsDocumentReload;
+    } catch (error) {
+      // One broken row must not fail the whole load; the loaded state stays as it is for that row.
+      console.error(`Skipping invalid buffered ${tableChange.table} change`, error);
+    }
   }
   return { state, needsDocumentReload };
 }
 
 /**
- * Applies a document loaded after an app_state switch, only when it is still the active document and
- * not older than the same document already in the state. A `null` result clears the document.
+ * Applies the result of loading `requestedId`, only while that id is still the active document and not
+ * older than the same document already in the state. A `null` result (no such document) clears it.
  */
-export function acceptReloadedDocument<S extends SceneData>(state: S, loaded: PlannerDocument | null): WithDocument<S> {
+export function acceptReloadedDocument<S extends SceneData>(state: S, requestedId: string, loaded: PlannerDocument | null): WithDocument<S> {
+  if (requestedId !== state.appState?.activeDocumentId) return state;
   if (loaded === null) return state.document ? { ...state, document: null } : state;
-  if (loaded.id !== state.appState?.activeDocumentId) return state;
+  if (loaded.id !== requestedId) return state;
   if (state.document?.id === loaded.id && state.document.version > loaded.version) return state;
   return { ...state, document: loaded };
 }

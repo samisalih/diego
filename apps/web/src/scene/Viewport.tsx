@@ -66,7 +66,7 @@ function SceneContent({ cameraSetup }: { cameraSetup: CameraSetup }) {
     <>
       <NeutralEnvironment intensity={levels.environmentIntensity} />
       <SkyBackground skyParams={sun.skyParams} intensity={levels.backgroundIntensity} />
-      <hemisphereLight args={[levels.hemisphereSkyColor, levels.hemisphereGroundColor, levels.hemisphereIntensity]} />
+      <hemisphereLight color={levels.hemisphereSkyColor} groundColor={levels.hemisphereGroundColor} intensity={levels.hemisphereIntensity} />
       <SunLight sun={sun} intensity={levels.sunIntensity} bounds={bounds} shadowMapSize={shadowMapSize} />
       <Ground />
       <ApartmentMeshes apartment={apartment} materials={materials} />

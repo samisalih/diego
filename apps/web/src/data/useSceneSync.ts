@@ -35,8 +35,10 @@ export function useSceneSync(): SceneSync {
 
     const reloadDocument = async (): Promise<void> => {
       try {
-        const document = await loadDocument(client, currentScene().appState?.activeDocumentId ?? null);
-        if (!isStopped) useSceneStore.setState(acceptReloadedDocument(currentScene(), document));
+        const requestedId = currentScene().appState?.activeDocumentId ?? null;
+        if (requestedId === null) return;
+        const document = await loadDocument(client, requestedId);
+        if (!isStopped) useSceneStore.setState(acceptReloadedDocument(currentScene(), requestedId, document));
       } catch (error) {
         console.error("Reloading the active document failed", error);
       }

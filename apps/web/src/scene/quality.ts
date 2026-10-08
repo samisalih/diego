@@ -47,7 +47,6 @@ type QualityState = {
   settle: () => void;
 };
 
-/** The current adaptive quality step; session state, never persisted. */
 /** Dev only: `&level=N` pins the quality step for profiling. */
 function pinnedDevLevel(): number | null {
   if (!import.meta.env.DEV) return null;
@@ -57,6 +56,7 @@ function pinnedDevLevel(): number | null {
 
 const pinnedLevel = pinnedDevLevel();
 
+/** The current adaptive quality step; session state, never persisted. */
 export const useQualityStore = create<QualityState>()((set) => ({
   levelIndex: pinnedLevel ?? 0,
   isSettled: pinnedLevel !== null,

@@ -2,7 +2,6 @@
 export const de = {
   app: {
     title: "Diego",
-    logoAlt: "Diego-Logo",
     loading: "Wohnung wird geladen …",
   },
   auth: {
