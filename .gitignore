@@ -11,3 +11,4 @@ dist/
 .remember/
 supabase/.temp/
 supabase/functions/**/dist/
+.claude/worktrees/
