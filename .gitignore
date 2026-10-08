@@ -1,0 +1,13 @@
+# Secrets — .mcp.json carries an access token
+.mcp.json
+.env
+.env.*
+!.env.example
+
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+.remember/
+supabase/.temp/
+supabase/functions/**/dist/
