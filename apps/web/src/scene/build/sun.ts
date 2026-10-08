@@ -22,7 +22,7 @@ export type SunSetup = {
 const NIGHT_ALTITUDE_DEG = -0.83;
 const SKY_DISTANCE = 1000;
 
-const DAY_SKY = { turbidity: 4, rayleigh: 1.5, mieCoefficient: 0.005, mieDirectionalG: 0.8 };
+const DAY_SKY = { turbidity: 8, rayleigh: 0.7, mieCoefficient: 0.01, mieDirectionalG: 0.8 };
 const NIGHT_SKY = { turbidity: 0.5, rayleigh: 0.05, mieCoefficient: 0.001, mieDirectionalG: 0.7 };
 
 // Camera-like auto exposure as [sun altitude in degrees, exposure] knots, interpolated in log space.
