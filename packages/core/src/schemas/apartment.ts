@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { wallLength } from "../geometry/polygon.ts";
 import { idSchema } from "../ids.ts";
 import { EPSILON, reportDuplicates } from "./common.ts";
 
@@ -45,9 +46,8 @@ export const roomSchema = z.object({
 );
 export type Room = z.infer<typeof roomSchema>;
 
-type WallEnds = { startX: number; startZ: number; endX: number; endZ: number };
-
-const getWallLength = (wall: WallEnds) => Math.hypot(wall.endX - wall.startX, wall.endZ - wall.startZ);
+export const ROOM_MATERIAL_FIELDS = ["floorMaterialId", "wallMaterialId", "ceilingMaterialId"] as const;
+export const OPENING_MATERIAL_FIELDS = ["frameMaterialId"] as const;
 
 export const wallSchema = z.object({
   id: idSchema("wall"),
@@ -58,7 +58,7 @@ export const wallSchema = z.object({
   thickness: z.number().min(0.05).max(1),
   exterior: z.boolean(),
   estimated: z.boolean().optional(),
-}).refine((wall) => getWallLength(wall) > MIN_WALL_LENGTH + EPSILON, {
+}).refine((wall) => wallLength(wall) > MIN_WALL_LENGTH + EPSILON, {
   message: `Wall length must be greater than ${MIN_WALL_LENGTH} m`,
 });
 export type Wall = z.infer<typeof wallSchema>;
@@ -96,7 +96,7 @@ export const apartmentSchema = z.object({
     const wall = wallsById.get(opening.wallId);
     if (!wall) {
       ctx.addIssue({ code: "custom", path: ["openings", index, "wallId"], message: `Wall "${opening.wallId}" does not exist` });
-    } else if (opening.offsetFromStart + opening.width > getWallLength(wall) + EPSILON) {
+    } else if (opening.offsetFromStart + opening.width > wallLength(wall) + EPSILON) {
       ctx.addIssue({ code: "custom", path: ["openings", index, "width"], message: "Opening extends beyond the end of its wall" });
     }
     if (opening.sillHeight + opening.height > apartment.meta.ceilingHeight + EPSILON) {

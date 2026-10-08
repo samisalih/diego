@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { toValidationIssues, type ValidationIssue } from "../validation.ts";
+import { safeParseWithIssues, type ValidationIssue } from "../validation.ts";
 
 export type OperationResult<T> = { ok: true; value: T; changedIds: string[] } | { ok: false; issues: ValidationIssue[] };
 
@@ -12,8 +12,8 @@ export function fail(issues: ValidationIssue[]): { ok: false; issues: Validation
 }
 
 export function validateResult<T>(schema: z.ZodType<T>, candidate: unknown, changedIds: string[]): OperationResult<T> {
-  const parsed = schema.safeParse(candidate);
-  return parsed.success ? ok(parsed.data, changedIds) : fail(toValidationIssues(parsed.error, candidate));
+  const parsed = safeParseWithIssues(schema, candidate);
+  return parsed.ok ? ok(parsed.value, changedIds) : fail(parsed.issues);
 }
 
 export function unknownIdIssue(field: string, id: string, noun: string): ValidationIssue {

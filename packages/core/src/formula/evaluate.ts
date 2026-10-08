@@ -106,17 +106,22 @@ export function evaluateFormula(source: string, scope: Scope): EvaluateResult {
   const parsed = parseFormula(source);
   if (!parsed.ok) return parsed;
   try {
-    return { ok: true, value: evaluateNode(parsed.ast, scope) };
+    return { ok: true, value: ensureFinite(evaluateNode(parsed.ast, scope), parsed.ast.position) };
   } catch (thrown) {
     if (thrown instanceof FormulaException) return { ok: false, error: thrown.error };
     throw thrown;
   }
 }
 
+export const MAX_FORMULA_LENGTH = 500;
+
 export function resolveNumber(value: number | string, scope: Scope): EvaluateResult {
   if (typeof value === "number") return { ok: true, value };
   if (!value.startsWith("=")) {
     return { ok: false, error: { message: 'formula must start with "="', position: 0 } };
+  }
+  if (value.length > MAX_FORMULA_LENGTH) {
+    return { ok: false, error: { message: `formula is too long (max ${MAX_FORMULA_LENGTH} characters)`, position: 0 } };
   }
   return evaluateFormula(value.slice(1), scope);
 }

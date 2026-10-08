@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { MAX_FORMULA_LENGTH } from "../formula/evaluate.ts";
 
 // A number, or a formula string such as "=width / 2".
-export const numberOrFormulaSchema = z.union([z.number(), z.string().startsWith("=")]);
+export const numberOrFormulaSchema = z.union([z.number(), z.string().startsWith("=").max(MAX_FORMULA_LENGTH)]);
 export type NumberOrFormula = z.infer<typeof numberOrFormulaSchema>;
 
 export const colorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { toValidationIssues } from "../src/validation.ts";
+import { itemSchema } from "../src/schemas/item.ts";
+import { materialSchema } from "../src/schemas/material.ts";
+import { safeParseWithIssues } from "../src/validation.ts";
+import { buildValidItem, buildValidMaterial } from "./fixtures.ts";
 
 function issuesFor(schema: z.ZodType, input: unknown) {
-  const result = schema.safeParse(input);
-  if (result.success) throw new Error("expected the schema to reject the input");
-  return toValidationIssues(result.error, input);
+  const result = safeParseWithIssues(schema, input);
+  if (result.ok) throw new Error("expected the schema to reject the input");
+  return result.issues;
 }
 
 describe("toValidationIssues", () => {
@@ -89,5 +92,43 @@ describe("toValidationIssues", () => {
     expect(issue!.field).toBe("a");
     expect(issue!.value).toBe(1);
     expect(issue!.message).toContain("a is bogus");
+  });
+});
+
+describe("allowed text for bounds", () => {
+  // Red if an exclusive lower bound (positive) is described as "at least 0" / "between".
+  it("describes a material tileSize of 0 as greater than 0", () => {
+    const input = { ...buildValidMaterial(), tileSize: 0 };
+    const issue = issuesFor(materialSchema, input).find((candidate) => candidate.field === "tileSize");
+    expect(issue?.allowed).toMatch(/greater than 0/);
+  });
+
+  // Red if the exclusive upper bound (lt 360) is described as inclusive.
+  it("describes an item rotation of 360 as below 360", () => {
+    const input = { ...buildValidItem(), rotation: 360 };
+    const issue = issuesFor(itemSchema, input).find((candidate) => candidate.field === "rotation");
+    expect(issue?.allowed).toMatch(/below 360|less than 360/);
+    expect(issue?.allowed).not.toMatch(/at most 360/);
+  });
+
+  // Red if inclusive ranges lose the "between X and Y" wording.
+  it("keeps inclusive ranges as between X and Y", () => {
+    const schema = z.object({ factor: z.number().min(0).max(2) });
+    const [issue] = issuesFor(schema, { factor: 5 });
+    expect(issue!.allowed).toMatch(/between 0 and 2/);
+  });
+});
+
+describe("global zod config", () => {
+  // Red if importing validation.ts installs a global customError (affects every other zod user).
+  it("does not install a global customError", () => {
+    expect(z.config().customError).toBeUndefined();
+  });
+
+  // Red if direct zod parsing yields a message altered by the validation module.
+  it("leaves zod's default messages untouched for direct parsing", () => {
+    const result = z.number().min(1).safeParse(0);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0]!.message).toBe("Too small: expected number to be >=1");
   });
 });

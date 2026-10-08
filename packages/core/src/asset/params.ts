@@ -18,13 +18,12 @@ export function normalizeParams(params: AssetParam[], values: Record<string, num
   return { values: normalized, clampedKeys };
 }
 
+export function applyNormalizedParams(item: Item, assetParams: AssetParam[], requested: Record<string, number> = item.params): Item {
+  const { clampedParams: _stale, ...rest } = item;
+  const { values, clampedKeys } = normalizeParams(assetParams, requested);
+  return clampedKeys.length > 0 ? { ...rest, params: values, clampedParams: clampedKeys } : { ...rest, params: values };
+}
+
 export function reconcileItemsWithAsset(items: Item[], asset: Asset): Item[] {
-  return items.map((item) => {
-    if (item.assetId !== asset.id) return item;
-    const { clampedParams: _stale, ...rest } = item;
-    const { values, clampedKeys } = normalizeParams(asset.params, item.params);
-    return clampedKeys.length > 0
-      ? { ...rest, params: values, clampedParams: clampedKeys }
-      : { ...rest, params: values };
-  });
+  return items.map((item) => (item.assetId === asset.id ? applyNormalizedParams(item, asset.params) : item));
 }

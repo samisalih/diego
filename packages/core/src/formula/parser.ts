@@ -77,12 +77,17 @@ const BINARY_BINDING: Record<string, { power: number; rightAssociative: boolean 
   "^": { power: 5, rightAssociative: true },
 };
 const UNARY_POWER = 4;
+const MAX_NESTING_DEPTH = 64;
 
 class Parser {
   private index = 0;
+  private depth = 0;
+  private readonly tokens: Token[];
   readonly identifiers: string[] = [];
 
-  constructor(private readonly tokens: Token[]) {}
+  constructor(tokens: Token[]) {
+    this.tokens = tokens;
+  }
 
   parseAll(): FormulaNode {
     const node = this.parseExpression(0);
@@ -116,6 +121,16 @@ class Parser {
   }
 
   private parseExpression(minPower: number): FormulaNode {
+    if (this.depth >= MAX_NESTING_DEPTH) throw new FormulaException("formula is too deeply nested", this.peek().position);
+    this.depth += 1;
+    try {
+      return this.parseBinary(minPower);
+    } finally {
+      this.depth -= 1;
+    }
+  }
+
+  private parseBinary(minPower: number): FormulaNode {
     let left = this.parsePrefix();
     for (;;) {
       const token = this.peek();

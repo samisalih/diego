@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   LIGHTING_PRESETS,
   PRESET_IDS,
-  kelvinToRgb,
   lumensToCandela,
   resolvePresetTime,
 } from "../src/lighting.ts";
+import { kelvinToRgb } from "../src/color.ts";
 import { goldenHourTime } from "../src/sun.ts";
 
 const LOCATION = { latitude: 52.52, longitude: 13.405, timeZone: "Europe/Berlin", year: 2026 };
@@ -134,8 +134,12 @@ describe("resolvePresetTime", () => {
 
   // Red if goldenHour returns a constant or does not delegate to goldenHourTime.
   it("computes goldenHour via goldenHourTime for the location", () => {
-    expect(resolvePresetTime("goldenHour", summer)).toBeCloseTo(goldenHourTime(summer), 6);
-    expect(resolvePresetTime("goldenHour", winter)).toBeCloseTo(goldenHourTime(winter), 6);
+    const summerHours = goldenHourTime(summer);
+    const winterHours = goldenHourTime(winter);
+    expect(summerHours).not.toBeNull();
+    expect(winterHours).not.toBeNull();
+    expect(resolvePresetTime("goldenHour", summer)).toBeCloseTo(summerHours as number, 6);
+    expect(resolvePresetTime("goldenHour", winter)).toBeCloseTo(winterHours as number, 6);
     expect(resolvePresetTime("goldenHour", summer)).toBeGreaterThan(resolvePresetTime("goldenHour", winter));
   });
 });

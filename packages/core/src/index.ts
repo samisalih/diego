@@ -2,6 +2,8 @@
 // so nothing in here may touch the DOM, three.js, Supabase or Deno APIs.
 export * from "./formula/parser.ts";
 export * from "./formula/evaluate.ts";
+export * from "./math.ts";
+export * from "./color.ts";
 export * from "./sun.ts";
 export * from "./lighting.ts";
 export * from "./ids.ts";
@@ -26,7 +28,7 @@ export * from "./toon.ts";
 export * from "./schemas/export.ts";
 export * from "./export/bundle.ts";
 export * from "./export/import.ts";
-export * from "./operations/result.ts";
+export type { OperationResult } from "./operations/result.ts";
 export * from "./operations/apartment.ts";
 export * from "./operations/items.ts";
 export * from "./operations/lighting.ts";

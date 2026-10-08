@@ -1,8 +1,8 @@
 import type { AssetFootprint } from "../asset/resolve.ts";
+import { DEGREES_TO_RADIANS } from "../math.ts";
 import type { Item } from "../schemas/item.ts";
 import type { Obb } from "./obb.ts";
 
-const DEGREES_TO_RADIANS = Math.PI / 180;
 
 export function itemObb(item: Item, footprint: AssetFootprint): Obb {
   const angle = item.rotation * DEGREES_TO_RADIANS;

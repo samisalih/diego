@@ -167,23 +167,37 @@ describe("files.save", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  // Red if the fallback does not click a download link with the name, or leaks the object URL.
-  it("falls back to an <a download> click and revokes the object URL", async () => {
-    const createObjectURL = vi.fn().mockReturnValue("blob:fake-1");
-    const revokeObjectURL = vi.fn();
-    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL }));
-    const clicked: HTMLAnchorElement[] = [];
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
-      clicked.push(this);
-    });
+  // Red if the fallback does not click a download link with the name, or never revokes the object URL.
+  it("falls back to an <a download> click and revokes the object URL after a delay", async () => {
+    vi.useFakeTimers();
+    try {
+      const createObjectURL = vi.fn().mockReturnValue("blob:fake-1");
+      const revokeObjectURL = vi.fn();
+      vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL }));
+      const clicked: HTMLAnchorElement[] = [];
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+        clicked.push(this);
+      });
 
-    await makePlatform().files.save({ suggestedName: "plan.json", data: new Blob(["{}"]) });
+      await makePlatform().files.save({ suggestedName: "plan.json", data: new Blob(["{}"]) });
 
-    expect(createObjectURL).toHaveBeenCalledTimes(1);
-    expect(clicked).toHaveLength(1);
-    expect(clicked[0]?.download).toBe("plan.json");
-    expect(clicked[0]?.href).toBe("blob:fake-1");
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:fake-1");
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(clicked).toHaveLength(1);
+      expect(clicked[0]?.download).toBe("plan.json");
+      expect(clicked[0]?.href).toBe("blob:fake-1");
+      // Revoking synchronously can cancel the download in some browsers, so it must be deferred.
+      expect(revokeObjectURL).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1000);
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:fake-1");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Red if cancelling the native save dialog rejects instead of resolving.
+  it("resolves without throwing when the native save picker is cancelled", async () => {
+    win.showSaveFilePicker = vi.fn().mockRejectedValue(new DOMException("cancelled", "AbortError"));
+    await expect(makePlatform().files.save({ suggestedName: "plan.json", data: "{}" })).resolves.toBeUndefined();
   });
 
   // Red if string data is not converted to a Blob for the fallback.

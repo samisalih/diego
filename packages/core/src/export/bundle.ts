@@ -1,4 +1,5 @@
 import { encodeToon, type TextFormat } from "../toon.ts";
+import { OPENING_MATERIAL_FIELDS, ROOM_MATERIAL_FIELDS } from "../schemas/apartment.ts";
 import type { Asset } from "../schemas/asset.ts";
 import type { DocumentContent } from "../schemas/document.ts";
 import type { ExportBundle } from "../schemas/export.ts";
@@ -17,8 +18,8 @@ export function buildExportBundle(content: DocumentContent, pool: EntityPool): E
   const parts = assets.flatMap((asset) => asset.parts);
   const { rooms, openings } = content.apartment;
   const materialIds = collectStrings([
-    ...rooms.flatMap((room) => [room.floorMaterialId, room.wallMaterialId, room.ceilingMaterialId]),
-    ...openings.map((opening) => opening.frameMaterialId),
+    ...rooms.flatMap((room) => ROOM_MATERIAL_FIELDS.map((field) => room[field])),
+    ...openings.flatMap((opening) => OPENING_MATERIAL_FIELDS.map((field) => opening[field])),
     ...parts.map((part) => part.materialId),
   ]);
   const modelIds = collectStrings(parts.map((part) => part.modelId));

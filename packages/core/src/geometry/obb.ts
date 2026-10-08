@@ -1,4 +1,5 @@
 import type { Wall } from "../schemas/apartment.ts";
+import type { Vec2 } from "../math.ts";
 import { wallLength } from "./polygon.ts";
 
 // Local x axis = (cos angle, -sin angle), local z axis = (sin angle, cos angle), like the item rotation.
@@ -9,8 +10,6 @@ export interface Obb {
   hz: number;
   angle: number;
 }
-
-export type Vec2 = [number, number];
 
 export function dot(a: Vec2, b: Vec2): number {
   return a[0] * b[0] + a[1] * b[1];

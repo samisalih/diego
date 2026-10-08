@@ -606,3 +606,30 @@ describe("replaceMaterialInAsset", () => {
     expect(asset).toEqual(snapshot);
   });
 });
+
+describe("placeItems and updateItems hardening", () => {
+  // Red if placeItems stores rotation unnormalised (schema range violation or raw value).
+  it.each([
+    [-90, 270],
+    [450, 90],
+  ])("placeItems normalises rotation %d to %d", (input, expected) => {
+    const result = expectOk(placeItems(buildContent(), [{ id: "item_rot", assetId: "asset_sofa", x: 1, z: 1, rotation: input }], buildAssets()));
+    expect(findItem(result.value, "item_rot").rotation).toBe(expected);
+  });
+
+  // Red if a params patch on an item with an unknown asset is silently applied.
+  it("updateItems with a params patch reports an unknown asset", () => {
+    const content = buildContent();
+    content.items = [buildItem({ id: "item_orphan", assetId: "asset_gone" })];
+    const issues = expectIssues(updateItems(content, [{ id: "item_orphan", params: { width: 2 } }], buildAssets()));
+    const issue = issues.find((candidate) => candidate.field === "items.item_orphan.assetId");
+    expect(issue).toBeDefined();
+    expect(issue!.message).toMatch(/unknown asset/i);
+  });
+
+  // Red if placeItems allows an id that already exists (duplicate item ids).
+  it("placeItems rejects an id that already exists in the document", () => {
+    const result = placeItems(buildContent(), [{ id: "item_sofa_1", assetId: "asset_sofa", x: 1, z: 1 }], buildAssets());
+    expect(result.ok).toBe(false);
+  });
+});

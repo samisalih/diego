@@ -1,4 +1,4 @@
-import { normalizeParams } from "../asset/params.ts";
+import { applyNormalizedParams } from "../asset/params.ts";
 import { createId } from "../ids.ts";
 import type { Asset } from "../schemas/asset.ts";
 import { documentContentSchema, type DocumentContent } from "../schemas/document.ts";
@@ -10,12 +10,6 @@ export type NewItem = Partial<Item> & { assetId: string; x: number; z: number };
 export type ItemPatch = Partial<Item> & { id: string };
 
 const POSITION_FIELDS = ["x", "z", "rotation"] as const;
-
-function withParams(item: Item, asset: Asset, requested: Record<string, number>): Item {
-  const { clampedParams: _stale, ...rest } = item;
-  const { values, clampedKeys } = normalizeParams(asset.params, requested);
-  return clampedKeys.length > 0 ? { ...rest, params: values, clampedParams: clampedKeys } : { ...rest, params: values };
-}
 
 function withItems(content: DocumentContent, items: Item[], changedIds: string[]): OperationResult<DocumentContent> {
   return validateResult(documentContentSchema, { ...content, items }, changedIds);
@@ -31,7 +25,8 @@ export function placeItems(content: DocumentContent, newItems: NewItem[], assets
       return;
     }
     const item = { id: createId("item"), rotation: 0, locked: false, hidden: false, lightOn: false, params: {}, ...newItem };
-    placed.push(withParams(item, asset, newItem.params ?? {}));
+    item.rotation = normalizeRotation(item.rotation);
+    placed.push(applyNormalizedParams(item, asset.params, newItem.params ?? {}));
   });
   if (issues.length > 0) return fail(issues);
   return withItems(content, [...content.items, ...placed], placed.map((item) => item.id));
@@ -57,7 +52,14 @@ function applyPatch(item: Item, patch: ItemPatch, assets: Asset[]): Item {
   if (fields.rotation !== undefined) patched.rotation = normalizeRotation(fields.rotation);
   if (params === undefined) return patched;
   const asset = assets.find((candidate) => candidate.id === patched.assetId);
-  return asset ? withParams(patched, asset, { ...item.params, ...params }) : patched;
+  return asset ? applyNormalizedParams(patched, asset.params, { ...item.params, ...params }) : patched;
+}
+
+function findUnknownAssetIssues(item: Item, patch: ItemPatch, assets: Asset[]): ValidationIssue[] {
+  if (patch.params === undefined) return [];
+  const assetId = patch.assetId ?? item.assetId;
+  if (assets.some((asset) => asset.id === assetId)) return [];
+  return [unknownIdIssue(`items.${item.id}.assetId`, assetId, "asset")];
 }
 
 export function updateItems(content: DocumentContent, patches: ItemPatch[], assets: Asset[]): OperationResult<DocumentContent> {
@@ -65,7 +67,8 @@ export function updateItems(content: DocumentContent, patches: ItemPatch[], asse
   const itemsById = new Map(content.items.map((item) => [item.id, item]));
   for (const patch of patches) {
     const item = itemsById.get(patch.id);
-    if (item) issues.push(...findLockedPositionIssues(item, patch));
+    if (!item) continue;
+    issues.push(...findLockedPositionIssues(item, patch), ...findUnknownAssetIssues(item, patch, assets));
   }
   if (issues.length > 0) return fail(issues);
 

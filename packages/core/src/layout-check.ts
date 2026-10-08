@@ -10,8 +10,8 @@ import {
   wallObb,
   wallSpanObb,
   type Obb,
-  type Vec2,
 } from "./geometry/obb.ts";
+import type { Vec2 } from "./math.ts";
 import { pointInPolygon, roomForPoint, wallLength } from "./geometry/polygon.ts";
 import type { Asset } from "./schemas/asset.ts";
 import type { Apartment, Opening, Wall } from "./schemas/apartment.ts";
@@ -54,7 +54,7 @@ function issue(kind: LayoutIssue["kind"], subjectId: string, fields: Partial<Lay
   return { kind, subjectId, objectId: null, value: null, detail: null, ...fields };
 }
 
-function placeItems(items: Item[], assets: Map<string, Asset>): { placed: PlacedItem[]; unknown: Item[] } {
+function resolvePlacements(items: Item[], assets: Map<string, Asset>): { placed: PlacedItem[]; unknown: Item[] } {
   const placed: PlacedItem[] = [];
   const unknown: Item[] = [];
   for (const item of items.filter((candidate) => !candidate.hidden)) {
@@ -189,9 +189,9 @@ function compareIssues(a: LayoutIssue, b: LayoutIssue): number {
 
 export function checkLayout(content: DocumentContent, assets: Map<string, Asset>): LayoutIssue[] {
   const { apartment } = content;
-  const { placed, unknown } = placeItems(content.items, assets);
+  const { placed, unknown } = resolvePlacements(content.items, assets);
   const outsideRoom = placed
-    .filter(({ item }) => roomForPoint(apartment, item.x, item.z) === null)
+    .filter(({ obb }) => roomForPoint(apartment, obb.cx, obb.cz) === null)
     .map(({ item }) => issue("outsideRoom", item.id));
   return [
     ...findCollisions(placed, apartment),

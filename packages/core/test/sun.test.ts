@@ -139,17 +139,24 @@ describe("sunPosition", () => {
   });
 });
 
+// Berlin always has a 2 degree crossing; a null here is a test failure, not a skipped case.
+function goldenHourOf(location: Parameters<typeof goldenHourTime>[0]): number {
+  const hours = goldenHourTime(location);
+  expect(hours).not.toBeNull();
+  return hours as number;
+}
+
 describe("goldenHourTime", () => {
   // Red if the winter date is used for summer (or vice versa).
   it("is later in summer than in winter", () => {
-    const s = goldenHourTime({ ...BERLIN, season: "summer" });
-    const w = goldenHourTime({ ...BERLIN, season: "winter" });
+    const s = goldenHourOf({ ...BERLIN, season: "summer" });
+    const w = goldenHourOf({ ...BERLIN, season: "winter" });
     expect(s).toBeGreaterThan(w);
   });
 
   // Red if the target altitude is not 2 degrees or the result is in the wrong unit.
   it.each(["summer", "winter"] as const)("sun altitude is about 2 degrees in the evening (%s)", (season) => {
-    const hours = goldenHourTime({ ...BERLIN, season });
+    const hours = goldenHourOf({ ...BERLIN, season });
     expect(hours).toBeGreaterThan(15);
     expect(hours).toBeLessThan(24);
     const pos = sunPosition({ ...BERLIN, season, northAngle: 0, time: hours });
@@ -158,8 +165,8 @@ describe("goldenHourTime", () => {
 
   // Red if the morning crossing is returned instead of the evening one.
   it("matches the reference evening times within 15 minutes", () => {
-    expect(Math.abs(goldenHourTime({ ...BERLIN, season: "summer" }) - 20.99)).toBeLessThan(0.25);
-    expect(Math.abs(goldenHourTime({ ...BERLIN, season: "winter" }) - 15.98)).toBeLessThan(0.25);
+    expect(Math.abs(goldenHourOf({ ...BERLIN, season: "summer" }) - 20.99)).toBeLessThan(0.25);
+    expect(Math.abs(goldenHourOf({ ...BERLIN, season: "winter" }) - 15.98)).toBeLessThan(0.25);
   });
 });
 
@@ -217,5 +224,19 @@ describe("sunLight", () => {
         expect(c).toBeLessThanOrEqual(1);
       }
     }
+  });
+});
+
+describe("goldenHourTime without a 2 degree crossing", () => {
+  const ARCTIC = { latitude: 80, longitude: 15, timeZone: "UTC", year: 2026 };
+
+  // Red if a bogus time is returned when the sun stays below 2 degrees all day.
+  it("returns null during polar night", () => {
+    expect(goldenHourTime({ ...ARCTIC, season: "winter" })).toBeNull();
+  });
+
+  // Red if a bogus time is returned when the sun stays above 2 degrees all day.
+  it("returns null during polar day", () => {
+    expect(goldenHourTime({ ...ARCTIC, season: "summer" })).toBeNull();
   });
 });

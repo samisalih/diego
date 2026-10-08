@@ -1,4 +1,4 @@
-import type { ApartmentMeta, Opening, Room, Wall } from "../schemas/apartment.ts";
+import { OPENING_MATERIAL_FIELDS, ROOM_MATERIAL_FIELDS, type ApartmentMeta, type Opening, type Room, type Wall } from "../schemas/apartment.ts";
 import { documentContentSchema, type DocumentContent } from "../schemas/document.ts";
 import { fail, findUnknownIds, mergeByKey, validateResult, type OperationResult } from "./result.ts";
 
@@ -44,8 +44,6 @@ export function upsertApartment(content: DocumentContent, changes: ApartmentChan
   return validateResult(documentContentSchema, candidate, [...upsertedIds, ...remove.rooms, ...remove.walls, ...removedOpeningIds]);
 }
 
-const ROOM_MATERIAL_KEYS = ["floorMaterialId", "wallMaterialId", "ceilingMaterialId"] as const;
-
 export function replaceMaterialReferences(
   content: DocumentContent,
   materialId: string,
@@ -54,15 +52,16 @@ export function replaceMaterialReferences(
   const changedIds: string[] = [];
 
   const rooms = content.apartment.rooms.map((room) => {
-    const affectedKeys = ROOM_MATERIAL_KEYS.filter((key) => room[key] === materialId);
+    const affectedKeys = ROOM_MATERIAL_FIELDS.filter((key) => room[key] === materialId);
     if (affectedKeys.length === 0) return room;
     changedIds.push(room.id);
     return { ...room, ...Object.fromEntries(affectedKeys.map((key) => [key, replacementId])) };
   });
   const openings = content.apartment.openings.map((opening) => {
-    if (opening.frameMaterialId !== materialId) return opening;
+    const affectedKeys = OPENING_MATERIAL_FIELDS.filter((key) => opening[key] === materialId);
+    if (affectedKeys.length === 0) return opening;
     changedIds.push(opening.id);
-    return { ...opening, frameMaterialId: replacementId };
+    return { ...opening, ...Object.fromEntries(affectedKeys.map((key) => [key, replacementId])) };
   });
 
   return validateResult(documentContentSchema, { ...content, apartment: { ...content.apartment, rooms, openings } }, changedIds);

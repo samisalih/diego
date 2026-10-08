@@ -1,13 +1,14 @@
 import { ToonDecodeError } from "@toon-format/toon";
 import { assetContentHash, materialContentHash, modelContentHash } from "../hash.ts";
 import { createId, type IdPrefix } from "../ids.ts";
+import { OPENING_MATERIAL_FIELDS, ROOM_MATERIAL_FIELDS } from "../schemas/apartment.ts";
 import type { Asset } from "../schemas/asset.ts";
 import type { DocumentContent } from "../schemas/document.ts";
 import { exportBundleSchema, type ExportBundle } from "../schemas/export.ts";
 import type { Material } from "../schemas/material.ts";
 import type { Model } from "../schemas/model.ts";
 import { decodeToon, detectFormat, locatePayload, type TextFormat } from "../toon.ts";
-import { toValidationIssues, type Result, type ValidationIssue } from "../validation.ts";
+import { safeParseWithIssues, type Result, type ValidationIssue } from "../validation.ts";
 import type { EntityPool } from "./bundle.ts";
 
 export type ImportIssue = ValidationIssue & { line?: number };
@@ -89,18 +90,14 @@ export function parseImport(text: string, format: TextFormat = detectFormat(text
   if (payload === "") return syntaxFailure("Empty input", "a JSON or TOON export bundle", 1);
   const parsed = format === "toon" ? parseToon(payload) : parseJson(payload);
   if (!parsed.ok) return { ok: false, issues: parsed.issues.map((issue) => shiftLine(issue, lineOffset)) };
-  const validated = exportBundleSchema.safeParse(parsed.value);
-  if (validated.success) return { ok: true, value: validated.data };
-  const issues = toValidationIssues(validated.error, parsed.value).map((issue) => ({
-    ...issue,
-    field: issue.field || ROOT_FIELD,
-  }));
-  return { ok: false, issues };
+  const validated = safeParseWithIssues(exportBundleSchema, parsed.value);
+  if (validated.ok) return validated;
+  return { ok: false, issues: validated.issues.map((issue) => ({ ...issue, field: issue.field || ROOT_FIELD })) };
 }
 
 // ---------- planning ----------
 
-function remapFields<T extends object>(entry: T, fields: string[], idMap: IdMap): T {
+function remapFields<T extends object>(entry: T, fields: readonly string[], idMap: IdMap): T {
   const copy = { ...entry } as Record<string, unknown>;
   for (const field of fields) {
     const id = copy[field];
@@ -143,8 +140,8 @@ function remapDocument(content: DocumentContent, materialIds: IdMap, assetIds: I
     ...content,
     apartment: {
       ...content.apartment,
-      rooms: rooms.map((room) => remapFields(room, ["floorMaterialId", "wallMaterialId", "ceilingMaterialId"], materialIds)),
-      openings: openings.map((opening) => remapFields(opening, ["frameMaterialId"], materialIds)),
+      rooms: rooms.map((room) => remapFields(room, ROOM_MATERIAL_FIELDS, materialIds)),
+      openings: openings.map((opening) => remapFields(opening, OPENING_MATERIAL_FIELDS, materialIds)),
     },
     items: content.items.map((item) => remapFields(item, ["assetId"], assetIds)),
   };

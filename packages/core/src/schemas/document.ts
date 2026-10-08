@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema } from "../ids.ts";
 import { apartmentSchema } from "./apartment.ts";
+import { reportDuplicates } from "./common.ts";
 import { itemSchema } from "./item.ts";
 import { lightingSchema } from "./lighting.ts";
 
@@ -9,6 +10,8 @@ export const documentContentSchema = z.object({
   apartment: apartmentSchema,
   items: z.array(itemSchema),
   lighting: lightingSchema,
+}).superRefine((content, ctx) => {
+  reportDuplicates(ctx, "items", content.items, "id");
 });
 export type DocumentContent = z.infer<typeof documentContentSchema>;
 

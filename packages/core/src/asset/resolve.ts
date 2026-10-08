@@ -1,5 +1,6 @@
 import { resolveNumber, type Scope } from "../formula/evaluate.ts";
 import type { FormulaError } from "../formula/parser.ts";
+import { DEGREES_TO_RADIANS, type Vec3 } from "../math.ts";
 import type { Asset, Part } from "../schemas/asset.ts";
 import type { BoundingBox } from "../schemas/model.ts";
 import { normalizeParams } from "./params.ts";
@@ -7,7 +8,6 @@ import { normalizeParams } from "./params.ts";
 const MAX_REPEAT_COUNT = 200;
 const SIZE_FALLBACK = 0.01;
 const SIZE_FIELDS = new Set(["w", "h", "d"]);
-const DEGREES_TO_RADIANS = Math.PI / 180;
 
 type NumericPartField = "x" | "y" | "z" | "rx" | "ry" | "rz" | "w" | "h" | "d" | "bevel";
 type FormulaPartField = NumericPartField | "repeat" | "light" | "fill" | "tube" | "profile";
@@ -40,37 +40,38 @@ export interface AssetFootprint {
   maxY: number;
 }
 
-type Vec3 = [number, number, number];
-
 function resolvePart(part: Part, id: string, scope: Scope, issues: ResolveIssue[]): ResolvedPart {
-  const num = (field: string, value: number | string): number => {
+  const resolveField = (field: string, value: number | string): number => {
     const result = resolveNumber(value, scope);
     if (result.ok) return result.value;
-    issues.push({ partId: part.id, field, error: result.error });
+    // Repeated copies of a part fail identically; report each base part + field once.
+    if (!issues.some((issue) => issue.partId === part.id && issue.field === field)) {
+      issues.push({ partId: part.id, field, error: result.error });
+    }
     return SIZE_FIELDS.has(field) ? SIZE_FALLBACK : 0;
   };
   const { repeat: _repeat, light, fill, tube, profile, ...rest } = part;
   const resolved = {
     ...rest,
     id,
-    x: num("x", part.x),
-    y: num("y", part.y),
-    z: num("z", part.z),
-    rx: num("rx", part.rx),
-    ry: num("ry", part.ry),
-    rz: num("rz", part.rz),
-    w: num("w", part.w),
-    h: num("h", part.h),
-    d: num("d", part.d),
-    bevel: num("bevel", part.bevel),
+    x: resolveField("x", part.x),
+    y: resolveField("y", part.y),
+    z: resolveField("z", part.z),
+    rx: resolveField("rx", part.rx),
+    ry: resolveField("ry", part.ry),
+    rz: resolveField("rz", part.rz),
+    w: resolveField("w", part.w),
+    h: resolveField("h", part.h),
+    d: resolveField("d", part.d),
+    bevel: resolveField("bevel", part.bevel),
   } as ResolvedPart;
   if (light) {
-    resolved.light = { ...light, lumens: num("light.lumens", light.lumens), kelvin: num("light.kelvin", light.kelvin) };
+    resolved.light = { ...light, lumens: resolveField("light.lumens", light.lumens), kelvin: resolveField("light.kelvin", light.kelvin) };
   }
-  if (fill !== undefined) resolved.fill = num("fill", fill);
-  if (tube !== undefined) resolved.tube = num("tube", tube);
+  if (fill !== undefined) resolved.fill = resolveField("fill", fill);
+  if (tube !== undefined) resolved.tube = resolveField("tube", tube);
   if (profile) {
-    resolved.profile = profile.map(([u, v], index) => [num(`profile[${index}][0]`, u), num(`profile[${index}][1]`, v)]);
+    resolved.profile = profile.map(([u, v], index) => [resolveField(`profile[${index}][0]`, u), resolveField(`profile[${index}][1]`, v)]);
   }
   return resolved;
 }

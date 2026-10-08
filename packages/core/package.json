@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc -p tsconfig.json" },
+  "scripts": { "typecheck": "tsc -p tsconfig.json && tsc -p scripts/tsconfig.json" },
   "dependencies": {
     "@toon-format/toon": "4.1.1",
     "suncalc": "2.1.1",

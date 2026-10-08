@@ -1011,3 +1011,26 @@ describe("appStateSchema", () => {
     expectRejectedAt(appStateSchema, { ...buildValidAppState(), aiBusyUntil: 12 }, "aiBusyUntil");
   });
 });
+
+describe("input limits", () => {
+  // Red if numberOrFormula strings have no length cap.
+  it("rejects a formula string longer than 500 characters in a part field", () => {
+    const input = buildValidAsset();
+    Object.assign(input.parts[0]!, { x: "=" + "1+".repeat(300) + "1" });
+    expectRejectedAt(assetSchema, input, "parts.part_seat.x");
+  });
+
+  // Red if the cap is off by one (500 characters stay valid).
+  it("accepts a formula string of exactly 500 characters", () => {
+    const input = buildValidAsset();
+    Object.assign(input.parts[0]!, { x: "=" + "1".repeat(499) });
+    expectAccepted(assetSchema, input);
+  });
+
+  // Red if duplicate item ids pass the document content schema.
+  it("documentContentSchema rejects duplicate item ids", () => {
+    const { id: _id, source: _source, ...content } = buildValidDocument();
+    const input = { ...content, items: [buildValidItem(), { ...buildValidItem(), x: 3 }] };
+    expectRejectedUnder(documentContentSchema, input, "items");
+  });
+});

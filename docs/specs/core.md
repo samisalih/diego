@@ -42,7 +42,10 @@ type ValidationIssue = { field: string; value: unknown; allowed: string; message
   have an `id` are addressed by id, others by index).
 - `allowed` is a human-readable English description (`"number between 0.05 and 1"`,
   `"one of: window, door, balconyDoor"`).
-- `toValidationIssues(zodError, input)` maps zod issues to this shape.
+- `toValidationIssues(zodError, input)` maps zod issues to this shape. Sibling bounds in `allowed` (the
+  `0.05` of a failing `max`) are only known to `safeParseWithIssues(schema, input): Result<T>`, which passes
+  a per-parse `error` hook to zod; core installs no global zod config. Exclusive bounds read
+  `"number greater than 0"` / `"number of at least 0 and below 360"`.
 - `type Result<T> = { ok: true; value: T } | { ok: false; issues: ValidationIssue[] }`.
 
 ## 3. Schemas — `schemas/*`
@@ -161,6 +164,7 @@ Model = { id: model_*; name: string; source: "upload" | "polyhaven" | "url"; sou
 DocumentSource = "user" | "ai" | "import"
 DocumentContent = { name: string; apartment: Apartment; items: Item[]; lighting: Lighting }
 Document = DocumentContent & { id: doc_*; source: DocumentSource }
+// item ids must be unique within DocumentContent
 AppState = { mode: "editor" | "documents" | "workshop"; activeDocumentId: doc_* | null;
              activeAssetId: asset_* | null; editorView: "dollhouse" | "firstPerson";
              renderMode: "work" | "photo"; photoResolution: { width: number; height: number };
@@ -194,10 +198,13 @@ parseFormula(source: string): { ok: true; ast: FormulaNode; identifiers: string[
 evaluateFormula(source: string, scope: Record<string, number>): { ok: true; value: number }
                                                               | { ok: false; error: FormulaError }
 resolveNumber(value: NumberOrFormula, scope): same result shape (plain numbers pass through)
-FormulaError = { message: string; position: number }   // position = index in the source string
+FormulaError = { message: string; position: number }   // position = index in the source string; for
+                                                       // resolveNumber relative to the expression after "="
 ```
 Errors: syntax errors with position; unknown identifier; unknown function; wrong argument count;
-division by zero; non-finite result. Identifier lookup must not reach the prototype chain
+division by zero; non-finite result (also for the final value, so `1e999` fails). Limits: nesting deeper
+than 64 levels → "too deeply nested"; `resolveNumber` rejects formula strings longer than 500 characters
+("too long"), and `numberOrFormulaSchema` caps them at 500 as well. Identifier lookup must not reach the prototype chain
 (`constructor`, `__proto__`, `toString` are unknown identifiers).
 
 ## 6. Asset params and resolution — `asset/*`
@@ -246,7 +253,7 @@ Flat and uniform on purpose (TOON tabular). Hidden items are ignored. Items whos
   of opening width × 0.8 m depth on each side of the wall (only the room side for exterior walls).
   Windows: 0.4 m depth on the room side, only items whose top (`maxY`) is above `sillHeight + 0.1`.
   subject = opening id, object = item id.
-- `outsideRoom`: item centre not inside any room.
+- `outsideRoom`: footprint (OBB) centre of the item not inside any room.
 - `clampedParam`: item has `clampedParams`; `detail` = comma-separated keys.
 - `adjustedParam`: item params differ from the asset defaults; `detail` = comma-separated keys.
 - Order: by kind in the order listed above, then subjectId.
@@ -263,7 +270,8 @@ Flat and uniform on purpose (TOON tabular). Hidden items are ignored. Items whos
   `direction = cos(alt)·(cos(az)·N + sin(az)·E) + sin(alt)·(0, 1, 0)`. Uses `suncalc` 2.1.1 (check its
   units: v2 returns degrees; the azimuth convention must be converted if it differs from the above).
 - `goldenHourTime({ season, latitude, longitude, timeZone, year })` → local time in hours when the
-  evening sun descends through 2° altitude (bisection, ±1 min).
+  evening sun descends through 2° altitude (bisection, ±1 min); `null` when the sun does not cross 2° that
+  day (polar day or night).
 - `sunLight(altitudeDeg)` → `{ color: [r, g, b] (0..1); illuminanceLux: number }`. Below −0.83°: lux 0.
   Colour from `kelvinToRgb` of a temperature rising from 2000 K at the horizon to 5800 K at 40°+;
   illuminance from an air-mass model, ~100 000 lx at 60°+, monotonically increasing with altitude.
@@ -277,7 +285,7 @@ Flat and uniform on purpose (TOON tabular). Hidden items are ignored. Items whos
 - `LIGHTING_PRESETS`: per id `{ time: number | "goldenHour"; effectsEnabled: boolean;
   mood: { grain: number; vignette: number; lightLeak: number; halftone: number } }` (0..1 strengths).
   Times: morningCoffee 7.5, noon 12.5, goldenHour computed, cozyEvening 20, movieNight 21.5.
-- `resolvePresetTime(presetId, location)` → hours (calls `goldenHourTime` for `goldenHour`).
+- `resolvePresetTime(presetId, location)` → hours (calls `goldenHourTime` for `goldenHour`; falls back to 19.5 when that is `null`).
 
 ## 11. TOON and export/import — `toon.ts`, `export/*`
 
@@ -316,9 +324,11 @@ and validates its result with the schemas (invalid input never produces a value)
   existing id the given fields are merged, for a new id the entry must be complete; removing a wall also
   removes its openings; unknown ids in `remove` → issue.
 - `placeItems(content, items: (Partial<Item> & { assetId; x; z })[], assets)` — generates missing ids,
-  defaults `rotation 0, locked false, hidden false, lightOn false`, normalises params; unknown asset → issue.
+  defaults `rotation 0, locked false, hidden false, lightOn false`, normalises rotation and params; unknown
+  asset → issue; an id that already exists → issue.
 - `updateItems(content, patches: (Partial<Item> & { id })[], assets)` — locked items reject position or
-  rotation changes (issue with `field` `items.<id>.x` …) unless the patch also sets `locked: false`.
+  rotation changes (issue with `field` `items.<id>.x` …) unless the patch also sets `locked: false`; a
+  `params` patch for an item whose asset is missing → issue on `items.<id>.assetId`.
 - `removeItems(content, ids)`, `duplicateItems(content, ids, offset = [0.1, 0.1])`.
 - `setLighting(content, patch: Partial<Lighting> & { allLamps?: boolean }, assets)` — `allLamps` sets
   `lightOn` on every item whose asset has at least one part with `light`.

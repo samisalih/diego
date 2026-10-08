@@ -428,3 +428,46 @@ describe("resolveNumber", () => {
     if (!result.ok) expect(result.error.message).toMatch(/unknown identifier/i);
   });
 });
+
+describe("robustness limits", () => {
+  const nested = (depth: number) => "(".repeat(depth) + "1" + ")".repeat(depth);
+
+  // Red if the parser recurses without a depth limit (stack overflow) or throws instead of returning an error.
+  it.each([
+    ["parentheses", nested(200)],
+    ["unary minus", "-".repeat(200) + "1"],
+  ])("rejects %s nested deeper than 64 levels without throwing", (_label, source) => {
+    let result: ReturnType<typeof evaluateFormula> | undefined;
+    expect(() => {
+      result = evaluateFormula(source, {});
+    }).not.toThrow();
+    expect(result?.ok).toBe(false);
+    if (result && !result.ok) expect(result.error.message).toMatch(/too deeply nested/i);
+  });
+
+  // Red if the depth limit is lower than intended (legitimate nesting must keep working).
+  it("still accepts moderate nesting", () => {
+    expect(evalOk(nested(30))).toBe(1);
+  });
+
+  // Red if a literal that overflows to Infinity is accepted.
+  it.each(["1e999", "-1e999"])("rejects the overflowing literal %s as non-finite", (source) => {
+    expect(evalError(source).message).toMatch(/finite/i);
+  });
+
+  // Red if resolveNumber has no length cap on formula strings.
+  it("resolveNumber rejects a formula string longer than 500 characters", () => {
+    const long = "=" + "1+".repeat(300) + "1";
+    expect(long.length).toBeGreaterThan(500);
+    const result = resolveNumber(long, {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.message).toMatch(/too long/i);
+  });
+
+  // Red if the cap is applied too early (500 characters stay valid).
+  it("resolveNumber accepts a formula string of exactly 500 characters", () => {
+    const exact = "=1" + "+0".repeat(249);
+    expect(exact.length).toBe(500);
+    expect(resolveNumber(exact, {}).ok).toBe(true);
+  });
+});

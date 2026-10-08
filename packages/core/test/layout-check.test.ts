@@ -416,3 +416,29 @@ describe("result ordering", () => {
     expect(issues.slice(0, 2).map((issue) => issue.subjectId)).toEqual(["item_a1", "item_c1"]);
   });
 });
+
+describe("outsideRoom uses the footprint centre", () => {
+  // Asset whose only part is offset along x, so the asset origin and the footprint centre differ by `offsetX`.
+  function buildOffsetAsset(id: string, offsetX: number): Asset {
+    const asset = buildBoxAsset();
+    return { ...asset, id, parts: [{ ...asset.parts[0]!, x: offsetX }] } as Asset;
+  }
+  const offsetAssets = new Map<string, Asset>([
+    ["asset_right", buildOffsetAsset("asset_right", 2)],
+    ["asset_left", buildOffsetAsset("asset_left", -2)],
+  ]);
+
+  // Red if the asset origin (x = -1, outside the room) is used instead of the OBB centre (x = 1, inside).
+  it("does not report an item whose origin is outside but whose footprint centre is inside", () => {
+    const scene = buildScene([buildItem("item_a", -1, 5, { assetId: "asset_right" })]);
+    expect(ofKind(checkLayout(scene, offsetAssets), "outsideRoom")).toEqual([]);
+  });
+
+  // Red if the asset origin (x = 1, inside) is used instead of the OBB centre (x = -1, outside).
+  it("reports an item whose origin is inside but whose footprint centre is outside", () => {
+    const scene = buildScene([buildItem("item_b", 1, 5, { assetId: "asset_left" })]);
+    const outside = ofKind(checkLayout(scene, offsetAssets), "outsideRoom");
+    expect(outside).toHaveLength(1);
+    expect(outside[0]).toMatchObject({ subjectId: "item_b" });
+  });
+});

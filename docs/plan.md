@@ -258,6 +258,11 @@ app_state (                          -- exactly one row, id = 1
   forever. The server sets `now() + 30 s` at the start of each write and clears it at the end; the UI
   shows "Claude arbeitet …" while the timestamp is in the future.
 - **`content_hash`** on assets, materials, models — the import dedup the brief asks for.
+- **`import_status` + `fallback_color`** on materials: texture files are imported asynchronously; until
+  they are ready the renderer uses the fallback colour.
+- **`meta.longitude` + `meta.timeZone`** in the apartment: needed to turn "19 Uhr im Winter" (local
+  wall-clock time incl. DST) into the correct sun position.
+- **Owner**: the first account created becomes the owner automatically (trigger on `auth.users`).
 
 ### 4.3 jsonb shapes
 

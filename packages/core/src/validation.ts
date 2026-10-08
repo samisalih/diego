@@ -5,28 +5,43 @@ export type ValidationIssue = { field: string; value: unknown; allowed: string; 
 export type Result<T> = { ok: true; value: T } | { ok: false; issues: ValidationIssue[] };
 
 type RawIssue = z.core.$ZodRawIssue;
+type RangeIssue = RawIssue & { code: "too_small" | "too_big" };
+type Bound = { value: number | bigint; inclusive: boolean };
+
+type CheckDef = {
+  check: string;
+  value?: number | bigint;
+  minimum?: number | bigint;
+  maximum?: number | bigint;
+  inclusive?: boolean;
+};
 
 // A failing check only knows its own bound; the opposite bound lives in the sibling checks of the schema.
-function findBounds(issue: RawIssue & { code: "too_small" | "too_big" }): { min?: number | bigint; max?: number | bigint } {
-  let min = issue.code === "too_small" ? issue.minimum : undefined;
-  let max = issue.code === "too_big" ? issue.maximum : undefined;
+function findBounds(issue: RangeIssue): { lower?: Bound; upper?: Bound } {
+  let lower: Bound | undefined;
+  let upper: Bound | undefined;
+  if (issue.code === "too_small") lower = { value: issue.minimum, inclusive: issue.inclusive ?? true };
+  else upper = { value: issue.maximum, inclusive: issue.inclusive ?? true };
   const checks = (issue as { schema?: z.core.$ZodType }).schema?._zod.def.checks ?? [];
   for (const check of checks) {
-    const def = check._zod.def as { check: string; value?: number | bigint; minimum?: number | bigint; maximum?: number | bigint };
-    if (def.check === "greater_than") min ??= def.value;
-    if (def.check === "min_length") min ??= def.minimum;
-    if (def.check === "less_than") max ??= def.value;
-    if (def.check === "max_length") max ??= def.maximum;
+    const def = check._zod.def as CheckDef;
+    if (def.check === "greater_than") lower ??= { value: def.value!, inclusive: def.inclusive ?? true };
+    if (def.check === "min_length") lower ??= { value: def.minimum!, inclusive: true };
+    if (def.check === "less_than") upper ??= { value: def.value!, inclusive: def.inclusive ?? true };
+    if (def.check === "max_length") upper ??= { value: def.maximum!, inclusive: true };
   }
-  return { min, max };
+  return { lower, upper };
 }
 
-function describeRange(issue: RawIssue & { code: "too_small" | "too_big" }): string {
-  const { min, max } = findBounds(issue);
+function describeRange(issue: RangeIssue): string {
+  const { lower, upper } = findBounds(issue);
   const noun = issue.origin === "number" ? "number" : `${issue.origin} length`;
-  if (min !== undefined && max !== undefined) return `${noun} between ${min} and ${max}`;
-  if (min !== undefined) return `${noun} of at least ${min}`;
-  return `${noun} of at most ${max}`;
+  if (lower?.inclusive && upper?.inclusive) return `${noun} between ${lower.value} and ${upper.value}`;
+  const parts = [
+    lower && (lower.inclusive ? `of at least ${lower.value}` : `greater than ${lower.value}`),
+    upper && (upper.inclusive ? `of at most ${upper.value}` : `below ${upper.value}`),
+  ].filter((part) => part !== undefined);
+  return `${noun} ${parts.join(" and ")}`;
 }
 
 function describeAllowed(issue: RawIssue): string | undefined {
@@ -47,12 +62,10 @@ function describeAllowed(issue: RawIssue): string | undefined {
 
 // zod's finalised issues no longer know their schema, so the bounds are captured while the raw issue is
 // still alive; zod copies the own keys of the raw issue (including `allowed`) into the final issue.
-z.config({
-  customError: (issue) => {
-    Object.assign(issue, { allowed: describeAllowed(issue) });
-    return undefined;
-  },
-});
+function attachAllowed(issue: RawIssue): undefined {
+  Object.assign(issue, { allowed: describeAllowed(issue) });
+  return undefined;
+}
 
 function getEntry(container: unknown, key: PropertyKey): unknown {
   return container !== null && typeof container === "object" ? (container as Record<PropertyKey, unknown>)[key] : undefined;
@@ -76,7 +89,12 @@ function toFieldAndValue(path: PropertyKey[], input: unknown): { field: string; 
 export function toValidationIssues(error: z.ZodError, input: unknown): ValidationIssue[] {
   return error.issues.map((issue) => ({
     ...toFieldAndValue(issue.path, input),
-    allowed: (issue as { allowed?: string }).allowed ?? issue.message,
+    allowed: (issue as { allowed?: string }).allowed ?? describeAllowed(issue as RawIssue) ?? issue.message,
     message: issue.message,
   }));
+}
+
+export function safeParseWithIssues<T>(schema: z.ZodType<T>, input: unknown): Result<T> {
+  const parsed = schema.safeParse(input, { error: attachAllowed });
+  return parsed.success ? { ok: true, value: parsed.data } : { ok: false, issues: toValidationIssues(parsed.error, input) };
 }

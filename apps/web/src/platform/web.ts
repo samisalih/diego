@@ -2,6 +2,7 @@ import type { PickedFile, Platform } from "./types";
 
 const CACHE_PREFIX = "apartment-planner:";
 const ALLOWED_LINK_PROTOCOLS = ["http:", "https:", "mailto:"];
+const REVOKE_OBJECT_URL_DELAY_MS = 1000;
 
 // Minimal shapes of the File System Access API, which is not part of the DOM typings.
 interface FileSystemWritableLike {
@@ -40,22 +41,36 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-async function saveFile(suggestedName: string, data: Blob | string): Promise<void> {
-  const blob = typeof data === "string" ? new Blob([data]) : data;
-  const picker = (window as FilePickerWindow).showSaveFilePicker;
-  if (picker) {
+async function saveWithPicker(
+  picker: NonNullable<FilePickerWindow["showSaveFilePicker"]>,
+  suggestedName: string,
+  blob: Blob,
+): Promise<void> {
+  try {
     const handle = await picker.call(window, { suggestedName });
     const writable = await handle.createWritable();
     await writable.write(blob);
     await writable.close();
-    return;
+  } catch (error) {
+    if (!isAbortError(error)) throw error;
   }
+}
+
+function saveWithDownloadLink(suggestedName: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = suggestedName;
   anchor.click();
-  URL.revokeObjectURL(url);
+  // Revoking right away can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_OBJECT_URL_DELAY_MS);
+}
+
+async function saveFile(suggestedName: string, data: Blob | string): Promise<void> {
+  const blob = typeof data === "string" ? new Blob([data]) : data;
+  const picker = (window as FilePickerWindow).showSaveFilePicker;
+  if (picker) return saveWithPicker(picker, suggestedName, blob);
+  saveWithDownloadLink(suggestedName, blob);
 }
 
 // Picker types need MIME-type keys; extension-only entries go under a generic key.
