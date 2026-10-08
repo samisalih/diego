@@ -91,6 +91,27 @@ issues).
   `scene-data`); on start-up, a cached snapshot is shown immediately while the network load runs.
 - A database change must be visible in the viewport within 2 s, without reload.
 
+### 2.5 Sync merge rules (`data/sync.ts`, pure, tested)
+The race-free order between the initial load and Realtime:
+- The channel is subscribed first. The full load starts on the **first** `SUBSCRIBED` and again on
+  every `SUBSCRIBED` that follows an error/close. Every load gets an increasing sequence number; only
+  the result of the newest load is applied, older results are dropped.
+- Changes that arrive while a load is in flight are buffered (in arrival order, tagged with their
+  table). When the load resolves, `mergeLoadResult(loaded: SceneData, buffered: TableChange[])` →
+  `{ state, needsDocumentReload }` replays them through the reducers on top of the loaded state.
+  `TableChange = { table: "documents" | "assets" | "materials" | "app_state"; change: RowChange }`.
+- The cached snapshot always loses against a load result (it is only a placeholder until the first
+  load lands).
+- Document reload after an `app_state` switch: `acceptReloadedDocument(state, loaded)` applies the
+  loaded document only when `loaded.id === state.appState?.activeDocumentId` and not older than a
+  document with the same id already in the state; otherwise the state is returned unchanged.
+- Reducer corrections: `applyDocumentChange` compares versions only when the ids match;
+  `applyAppStateChange` sets `document` to `null` when `activeDocumentId` changes (the reload fills it).
+- Cache snapshot: key `scene-data:v1`; `parseCachedScene(raw: unknown)` → `SceneData | null`
+  validates every document/asset/material/app state with the core schemas and returns `null` for
+  anything invalid (the snapshot is then discarded). The cache is cleared on every `SIGNED_OUT` auth
+  event, not only on the sign-out button.
+
 ### 2.4 Fixture mode
 Only when `import.meta.env.DEV` and the URL hash route carries `?fixture=seed`: the store is filled
 from core's `SEED_DOCUMENT`, `SEED_ASSETS`, `SEED_MATERIALS` with `appState` defaults; no Supabase
@@ -198,7 +219,8 @@ centre from the south-east at ~45° elevation, distance chosen so the whole boun
 ## 5. Rendering (`scene/`)
 
 ### 5.1 Renderer
-- R3F `<Canvas>` with WebGL (not WebGPU), `shadows="soft"` (PCF soft), `dpr` adaptive `[1, 2]`,
+- R3F `<Canvas>` with WebGL (not WebGPU), `shadows="percentage"` (PCF; three r186 removed
+  `PCFSoftShadowMap`), `dpr` adaptive `[1, 2]`,
   output colour space sRGB, renderer tone mapping **off** — tone mapping happens once, as the last
   post-processing effect.
 - Viewport fills the space next to the (later) side panel; in phase b it fills the window. Nothing is
@@ -228,6 +250,17 @@ centre from the south-east at ~45° elevation, distance chosen so the whole boun
 - Exposure: one scene exposure value chosen like a camera so that a sunny noon interior is neither
   blown out nor dark; at night the exposure rises so the scene is dim but readable. Keep the mapping in
   a pure, tested function `exposureForSun(altitudeDeg)` in `scene/build/sun.ts`.
+- Light levels: `lightingLevels(sun: SunSetup)` in `scene/build/sun.ts` (pure, tested) returns
+  `{ sunIntensity, environmentIntensity, backgroundIntensity, hemisphereIntensity,
+  hemisphereSkyColor, hemisphereGroundColor }`. Every intensity in the scene comes from here (no
+  literals in components). All values ≥ 0 and finite; at night environment and hemisphere stay > 0
+  (dim but readable); values change continuously across the horizon (no jump between −1° and +1°).
+- **Colour fidelity:** the apartment's colours must read true — oak looks like warm wood, beige tiles
+  look beige, linen looks warm off-white. The blue sky must not tint the interior: the environment
+  used for *lighting* (`scene.environment`) is neutral (e.g. a PMREM of a neutral room/studio
+  environment, warmed slightly by the sun colour); the Preetham sky is used as *background* only.
+- Empty apartment (no walls, no rooms): `apartmentBounds` returns fallback bounds centred on the origin
+  (radius 5 m) instead of NaN.
 - Glass: real `transmission` on panes with reduced transmission resolution; when adaptive quality drops
   to the lowest level, panes switch to thin transparent glass without transmission.
 
