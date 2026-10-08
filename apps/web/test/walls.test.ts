@@ -52,9 +52,10 @@ function sideFaces(triangles: Triangle[], wall: Wall, side: 1 | -1) {
 }
 
 describe("buildWallGeometry", () => {
+  // Single-wall tests below pass [wall] as the wall list: nothing joins, so no end is extended.
   describe("plain wall without openings", () => {
     const wall = wallById("wall_kitchen_bath");
-    const geometry = buildWallGeometry(wall, openings, CEILING);
+    const geometry = buildWallGeometry(wall, [wall], openings, CEILING);
 
     // Red if length, thickness, height or placement of the box is wrong.
     it("is a box along the centre line, thickness deep and 0..ceilingHeight high", () => {
@@ -71,7 +72,7 @@ describe("buildWallGeometry", () => {
     it("follows a diagonal centre line", () => {
       const diagonal: Wall = { id: "wall_diag", startX: 1, startZ: 1, endX: 4, endZ: 5, thickness: 0.2, exterior: false };
       const { toLocal } = localFrame(diagonal);
-      for (const vertex of getVertices(buildWallGeometry(diagonal, [], 2.5))) {
+      for (const vertex of getVertices(buildWallGeometry(diagonal, [diagonal], [], 2.5))) {
         const local = toLocal(vertex);
         expect(local.u).toBeGreaterThan(-EPS);
         expect(local.u).toBeLessThan(5 + EPS);
@@ -106,7 +107,7 @@ describe("buildWallGeometry", () => {
     const wall = wallById("wall_north");
     const door = openingById("opening_front_door");
     const window = openingById("opening_kitchen_window_north");
-    const geometry = buildWallGeometry(wall, openings, CEILING);
+    const geometry = buildWallGeometry(wall, [wall], openings, CEILING);
     const triangles = getTriangles(geometry);
     const frame = localFrame(wall);
 
@@ -175,7 +176,7 @@ describe("buildWallGeometry", () => {
       const window = openingById("opening_kitchen_window_east");
       const frame = localFrame(wall);
       const rect = holeRect(window);
-      const triangles = getTriangles(buildWallGeometry(wall, openings, CEILING));
+      const triangles = getTriangles(buildWallGeometry(wall, [wall], openings, CEILING));
       const reveals = triangles.filter((t) => {
         const c = frame.toLocal(t.centroid);
         const n = frame.dirToLocal(t.faceNormal);
@@ -193,7 +194,7 @@ describe("buildWallGeometry", () => {
       const frame = localFrame(wall);
       const rect = holeRect(window);
       const centre = { u: (rect.u0 + rect.u1) / 2, v: (rect.v0 + rect.v1) / 2 };
-      const reveals = getTriangles(buildWallGeometry(wall, openings, CEILING)).filter((t) => {
+      const reveals = getTriangles(buildWallGeometry(wall, [wall], openings, CEILING)).filter((t) => {
         const c = frame.toLocal(t.centroid);
         const n = frame.dirToLocal(t.faceNormal);
         return Math.abs(n.w) < 0.01 && c.u > rect.u0 - EPS && c.u < rect.u1 + EPS && c.v > rect.v0 - EPS && c.v < rect.v1 + EPS;
@@ -213,7 +214,7 @@ describe("buildWallGeometry", () => {
       const wall = wallById("wall_hallway_west");
       const frame = localFrame(wall);
       const wallOpenings = openings.filter((opening) => opening.wallId === wall.id);
-      const triangles = getTriangles(buildWallGeometry(wall, openings, CEILING));
+      const triangles = getTriangles(buildWallGeometry(wall, [wall], openings, CEILING));
       const expected = frame.length * CEILING - wallOpenings.reduce((sum, opening) => sum + holeArea(opening), 0);
       expect(sumArea(sideFaces(triangles, wall, 1))).toBeCloseTo(expected, 4);
       expect(wallOpenings).toHaveLength(2);
@@ -224,16 +225,16 @@ describe("buildWallGeometry", () => {
       const wall = wallById("wall_north");
       const door = openingById("opening_front_door");
       const lowCeiling = 2;
-      const triangles = getTriangles(buildWallGeometry(wall, [door], lowCeiling));
+      const triangles = getTriangles(buildWallGeometry(wall, [wall], [door], lowCeiling));
       const expected = wallLength(wall) * lowCeiling - holeArea(door, lowCeiling);
       expect(sumArea(sideFaces(triangles, wall, 1))).toBeCloseTo(expected, 4);
-      expect(boundsOf(buildWallGeometry(wall, [door], lowCeiling)).max.y).toBeCloseTo(lowCeiling, 5);
+      expect(boundsOf(buildWallGeometry(wall, [wall], [door], lowCeiling)).max.y).toBeCloseTo(lowCeiling, 5);
     });
   });
 
   describe("UVs and normals", () => {
     const wall = wallById("wall_north");
-    const triangles = getTriangles(buildWallGeometry(wall, openings, CEILING));
+    const triangles = getTriangles(buildWallGeometry(wall, [wall], openings, CEILING));
 
     // Red if UVs are normalised 0..1 instead of metres: every edge must have the same length in UV and in space.
     it("maps UVs in metres on every face", () => {
@@ -247,7 +248,7 @@ describe("buildWallGeometry", () => {
     // Red if the UV scale depends on the wall length (a 0..1 stretch).
     it("keeps the UV scale independent of wall size", () => {
       const short: Wall = { ...wall, id: "wall_short", endX: wall.startX + 1 };
-      const shortTriangles = getTriangles(buildWallGeometry(short, [], CEILING));
+      const shortTriangles = getTriangles(buildWallGeometry(short, [short], [], CEILING));
       const front = sideFaces(shortTriangles, short, 1);
       const us = front.flatMap((t) => t.uvs.map((uv) => uv.x));
       const vs = front.flatMap((t) => t.uvs.map((uv) => uv.y));
@@ -282,6 +283,148 @@ describe("buildWallGeometry", () => {
       const tops = triangles.filter((t) => Math.abs(t.centroid.y - CEILING) < EPS && Math.abs(t.faceNormal.y) > 0.99);
       expect(tops.length).toBeGreaterThan(0);
       for (const t of tops) expect(t.faceNormal.y).toBeGreaterThan(0.99);
+    });
+  });
+
+  describe("corner joins (full seed wall list)", () => {
+    const wallsById = (id: string) => boundsOf(buildWallGeometry(wallById(id), walls, openings, CEILING));
+    const inside = (box: ReturnType<typeof boundsOf>, x: number, y: number, z: number) =>
+      x >= box.min.x - EPS && x <= box.max.x + EPS && y >= box.min.y - EPS && y <= box.max.y + EPS && z >= box.min.z - EPS && z <= box.max.z + EPS;
+
+    // Red if outer walls are not extended by half their own thickness (0.18 m) at both ends.
+    it("extends the outer walls at joined ends by half their thickness", () => {
+      const north = wallsById("wall_north");
+      expect(north.min.x).toBeCloseTo(0, 5);
+      expect(north.max.x).toBeCloseTo(9.36, 5);
+      expect(north.min.z).toBeCloseTo(0, 5);
+      expect(north.max.z).toBeCloseTo(0.36, 5);
+      const west = wallsById("wall_west");
+      expect(west.min.z).toBeCloseTo(0, 5);
+      expect(west.max.z).toBeCloseTo(7.36, 5);
+      expect(west.min.x).toBeCloseTo(0, 5);
+      expect(west.max.x).toBeCloseTo(0.36, 5);
+    });
+
+    // Red if an L-corner keeps a notch: the corner square centre must be covered by both adjoining walls.
+    it("covers the square of every outer L-corner", () => {
+      const corners: Array<[string, string, number, number]> = [
+        ["wall_north", "wall_west", 0.09, 0.09],
+        ["wall_north", "wall_east", 9.27, 0.09],
+        ["wall_south", "wall_west", 0.09, 7.27],
+        ["wall_south", "wall_east", 9.27, 7.27],
+      ];
+      for (const [a, b, x, z] of corners) {
+        expect(inside(wallsById(a), x, 1, z), `${a} @ ${x},${z}`).toBe(true);
+        expect(inside(wallsById(b), x, 1, z), `${b} @ ${x},${z}`).toBe(true);
+      }
+    });
+
+    // Red if interior walls are not extended by their own half thickness (0.055) or are extended further (poking out).
+    it("extends interior walls ending on an outer wall's centre line by their own half thickness", () => {
+      const hallway = wallsById("wall_hallway_west");
+      expect(hallway.min.z).toBeCloseTo(0.18 - 0.055, 5);
+      expect(hallway.max.z).toBeCloseTo(7.18 + 0.055, 5);
+      expect(hallway.min.x).toBeCloseTo(5.1 - 0.055, 5);
+      expect(hallway.max.x).toBeCloseTo(5.1 + 0.055, 5);
+      // Stays inside the outer walls (their outer faces are at z = 0 and z = 7.36).
+      expect(hallway.min.z).toBeGreaterThan(0);
+      expect(hallway.max.z).toBeLessThan(7.36);
+    });
+
+    // Red if an interior wall joining a perpendicular interior wall's centre line is not extended on that end.
+    it("extends interior walls at both joins (outer wall and interior wall)", () => {
+      const bedroomLiving = wallsById("wall_bedroom_living");
+      expect(bedroomLiving.min.x).toBeCloseTo(0.18 - 0.055, 5);
+      expect(bedroomLiving.max.x).toBeCloseTo(5.1 + 0.055, 5);
+      expect(bedroomLiving.min.x).toBeGreaterThan(0);
+    });
+
+    // Red if the extension changes the thickness or height of the wall.
+    it("keeps thickness and height when extending", () => {
+      const north = wallsById("wall_north");
+      expect(north.size.z).toBeCloseTo(0.36, 5);
+      expect(north.max.y).toBeCloseTo(CEILING, 5);
+      expect(north.min.y).toBeCloseTo(0, 5);
+    });
+  });
+
+  describe("free ends and near misses (tiny apartment)", () => {
+    const thick = 0.2;
+    const a: Wall = { id: "wall_a", startX: 0, startZ: 0, endX: 4, endZ: 0, thickness: thick, exterior: true };
+    const b: Wall = { id: "wall_b", startX: 4, startZ: 0, endX: 4, endZ: 3, thickness: thick, exterior: true };
+    const list = [a, b];
+
+    // Red if a free end is extended, or a joined end is not.
+    it("extends only the joined end", () => {
+      const boxA = boundsOf(buildWallGeometry(a, list, [], 2.5));
+      expect(boxA.min.x).toBeCloseTo(0, 5);
+      expect(boxA.max.x).toBeCloseTo(4.1, 5);
+      const boxB = boundsOf(buildWallGeometry(b, list, [], 2.5));
+      expect(boxB.min.z).toBeCloseTo(-0.1, 5);
+      expect(boxB.max.z).toBeCloseTo(3, 5);
+    });
+
+    // Red if the join test is not tight (5 mm away from the centre line is no join).
+    it("does not extend an end that is 5 mm away from another wall", () => {
+      const c: Wall = { id: "wall_c", startX: 2, startZ: 2, endX: 2, endZ: 0.005, thickness: 0.1, exterior: false };
+      const box = boundsOf(buildWallGeometry(c, [a, c], [], 2.5));
+      expect(box.min.z).toBeCloseTo(0.005, 5);
+    });
+
+    // Red if a joined end within 1 mm of the centre line is not recognised.
+    it("extends an end that lies within 1 mm of another wall's centre line", () => {
+      const c: Wall = { id: "wall_c", startX: 2, startZ: 2, endX: 2, endZ: 0.0005, thickness: 0.1, exterior: false };
+      const box = boundsOf(buildWallGeometry(c, [a, c], [], 2.5));
+      expect(box.min.z).toBeCloseTo(0.0005 - 0.05, 5);
+    });
+
+    // Red if the wall joins itself (a wall's own end points must not count as another wall).
+    it("ignores the wall itself when looking for joins", () => {
+      const box = boundsOf(buildWallGeometry(a, [a], [], 2.5));
+      expect(box.min.x).toBeCloseTo(0, 5);
+      expect(box.max.x).toBeCloseTo(4, 5);
+    });
+  });
+
+  describe("openings keep their world position when ends are extended", () => {
+    const wall = wallById("wall_north");
+    const door = openingById("opening_front_door");
+    const window = openingById("opening_kitchen_window_north");
+    const geometry = buildWallGeometry(wall, walls, openings, CEILING);
+    const triangles = getTriangles(geometry);
+    const frame = localFrame(wall); // u counts from the original start (0.18, 0.18)
+
+    // Red if the offset is measured from the extended start (holes would shift by 0.18 m).
+    it("has hole corner vertices at world x = startX + offset", () => {
+      const vertices = getVertices(geometry);
+      for (const opening of [door, window]) {
+        const rect = holeRect(opening);
+        for (const u of [rect.u0, rect.u1]) {
+          const x = wall.startX + u;
+          const found = vertices.some((p) => Math.abs(p.x - x) < 1e-5 && Math.abs(p.y - rect.v1) < 1e-5);
+          expect(found, `${opening.id} x=${x}`).toBe(true);
+        }
+      }
+    });
+
+    // Red if the hole area or the extended face area is wrong.
+    it("removes exactly the hole areas from the extended front face", () => {
+      const extendedLength = frame.length + wall.thickness;
+      const expected = extendedLength * CEILING - holeArea(door) - holeArea(window);
+      const front = triangles.filter((t) => t.positions.every((p) => Math.abs(p.z - (wall.startZ + wall.thickness / 2)) < EPS) && Math.abs(t.faceNormal.z) > 0.99);
+      expect(sumArea(front)).toBeCloseTo(expected, 4);
+    });
+
+    // Red if any triangle covers the hole in world coordinates.
+    it("leaves both holes open", () => {
+      for (const opening of [door, window]) {
+        const rect = holeRect(opening);
+        const covering = triangles.filter((t) => {
+          const u = t.centroid.x - wall.startX;
+          return u > rect.u0 + EPS && u < rect.u1 - EPS && t.centroid.y > rect.v0 + EPS && t.centroid.y < rect.v1 - EPS;
+        });
+        expect(covering, opening.id).toHaveLength(0);
+      }
     });
   });
 });
