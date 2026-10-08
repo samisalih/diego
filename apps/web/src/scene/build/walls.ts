@@ -1,4 +1,5 @@
 import { wallLength, type Opening, type Wall } from "@app/core";
+import { wallDirection } from "./wallDirection.ts";
 import { BufferGeometry, Float32BufferAttribute } from "three";
 
 /** Wall-local coordinates: u along the centre line, v up, w across the thickness. u x v = w. */
@@ -54,16 +55,12 @@ class WallMesh {
   }
 
   private toWorld([u, v, w]: Local): Local {
-    const length = wallLength(this.wall);
-    const dirX = (this.wall.endX - this.wall.startX) / length;
-    const dirZ = (this.wall.endZ - this.wall.startZ) / length;
+    const [dirX, dirZ] = wallDirection(this.wall);
     return [this.wall.startX + u * dirX - w * dirZ, v, this.wall.startZ + u * dirZ + w * dirX];
   }
 
   private toWorldDirection([u, v, w]: Local): Local {
-    const length = wallLength(this.wall);
-    const dirX = (this.wall.endX - this.wall.startX) / length;
-    const dirZ = (this.wall.endZ - this.wall.startZ) / length;
+    const [dirX, dirZ] = wallDirection(this.wall);
     return [u * dirX - w * dirZ, v, u * dirZ + w * dirX];
   }
 }

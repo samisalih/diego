@@ -1,18 +1,14 @@
 import { DEGREES_TO_RADIANS, type Asset, type Item, type Material } from "@app/core";
 import { useEffect, useMemo } from "react";
-import { buildItemParts } from "./build/items.ts";
+import { buildItemParts, type ItemPart } from "./build/items.ts";
 import { buildPartGeometry } from "./build/parts.ts";
 import { GeometryCache } from "./geometryCache.ts";
 import { SurfaceMaterial } from "./Surfaces.tsx";
 import { useDeepStable } from "./useDeepStable.ts";
 
-type ItemProps = { item: Item; asset: Asset | undefined; materials: ReadonlyMap<string, Material>; cache: GeometryCache };
+type ItemMeshesProps = { item: Item; parts: ItemPart[]; materials: ReadonlyMap<string, Material>; cache: GeometryCache };
 
-function ItemMeshes({ item: itemInput, asset: assetInput, materials, cache }: ItemProps) {
-  const item = useDeepStable(itemInput);
-  const asset = useDeepStable(assetInput);
-  const parts = useMemo(() => buildItemParts(item, asset), [item, asset]);
-
+function ItemMeshes({ item, parts, materials, cache }: ItemMeshesProps) {
   return (
     <group position={[item.x, 0, item.z]} rotation={[0, item.rotation * DEGREES_TO_RADIANS, 0]}>
       {parts.map((part) => (
@@ -32,22 +28,26 @@ function ItemMeshes({ item: itemInput, asset: assetInput, materials, cache }: It
 }
 
 /** All furniture; equal parts share one cached geometry, unused geometries are disposed after every commit. */
-export function ItemsMeshes({ items, assets, materials }: { items: Item[]; assets: ReadonlyMap<string, Asset>; materials: ReadonlyMap<string, Material> }) {
+export function ItemsMeshes({ items: itemsInput, assets, materials }: { items: Item[]; assets: ReadonlyMap<string, Asset>; materials: ReadonlyMap<string, Material> }) {
+  const items = useDeepStable(itemsInput);
+  const assetEntries = useDeepStable([...assets.entries()]);
   const cache = useMemo(() => new GeometryCache(), []);
 
-  const keysInUse = useMemo(() => {
-    const keys = new Set<string>();
-    for (const item of items) for (const part of buildItemParts(item, assets.get(item.assetId))) keys.add(part.geometryKey);
-    return keys;
-  }, [items, assets]);
+  const itemsWithParts = useMemo(() => {
+    const assetsById = new Map(assetEntries);
+    return items.map((item) => ({ item, parts: buildItemParts(item, assetsById.get(item.assetId)) }));
+  }, [items, assetEntries]);
 
-  useEffect(() => cache.retainOnly(keysInUse));
+  useEffect(() => {
+    const keysInUse = new Set(itemsWithParts.flatMap(({ parts }) => parts.map((part) => part.geometryKey)));
+    cache.retainOnly(keysInUse);
+  });
   useEffect(() => () => cache.disposeAll(), [cache]);
 
   return (
     <group>
-      {items.map((item) => (
-        <ItemMeshes key={item.id} item={item} asset={assets.get(item.assetId)} materials={materials} cache={cache} />
+      {itemsWithParts.map(({ item, parts }) => (
+        <ItemMeshes key={item.id} item={item} parts={parts} materials={materials} cache={cache} />
       ))}
     </group>
   );

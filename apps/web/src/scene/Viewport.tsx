@@ -1,26 +1,47 @@
 import { Canvas } from "@react-three/fiber";
 import { ContactShadows, PerformanceMonitor } from "@react-three/drei";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSceneStore } from "../data/store.ts";
 import { installFrameStats } from "../dev/frameStats.ts";
 import { ApartmentMeshes } from "./Apartment.tsx";
 import { apartmentBounds, type CameraSetup } from "./build/framing.ts";
 import { initialCamera } from "./build/initialCamera.ts";
-import { sunSetup } from "./build/sun.ts";
+import { lightingLevels, sunSetup } from "./build/sun.ts";
 import { DollhouseControls } from "./DollhouseControls.tsx";
 import { Effects } from "./Effects.tsx";
 import { Ground } from "./Ground.tsx";
 import { ItemsMeshes } from "./Items.tsx";
-import { useQualityLevel, useQualityStore } from "./quality.ts";
-import { SkyEnvironment } from "./SkyEnvironment.tsx";
+import { QUALITY_LEVELS, useQualityLevel, useQualityStore } from "./quality.ts";
+import { NeutralEnvironment, SkyBackground } from "./SkyEnvironment.tsx";
 import { SunLight } from "./SunLight.tsx";
 import { useDeepStable } from "./useDeepStable.ts";
+import { withDevLightingOverride } from "../dev/lightingOverride.ts";
 
 const CAMERA_NEAR = 0.1;
 const CAMERA_FAR = 1500;
 const TRANSMISSION_RESOLUTION_SCALE = 0.5;
 const CONTACT_SHADOW_RESOLUTION = 512;
 const CONTACT_SHADOW_REACH_M = 0.6;
+const CONTACT_SHADOW_LIFT_M = 0.002;
+const CONTACT_SHADOW_OPACITY = 0.5;
+const CONTACT_SHADOW_BLUR = 2;
+const MONITOR_MAX_FLIPFLOPS = 3;
+// Hysteresis between stepping down and back up so a step never immediately undoes itself.
+const MONITOR_BOUNDS_60HZ: [number, number] = [45, 58];
+const MONITOR_BOUNDS_HIGH_REFRESH: [number, number] = [55, 100];
+const HIGH_REFRESH_RATE_HZ = 100;
+// Shader compilation and the first bakes stall the first frames; sampling starts after that.
+const MONITOR_WARMUP_MS = 4000;
+
+/**
+ * fps bounds for the monitor. At the best level there is nothing to step up to and at the worst nothing
+ * to step down to; unreachable bounds there keep those windows from counting as flip-flops.
+ */
+function monitorBounds(refreshRate: number): [number, number] {
+  const [lower, upper] = refreshRate > HIGH_REFRESH_RATE_HZ ? MONITOR_BOUNDS_HIGH_REFRESH : MONITOR_BOUNDS_60HZ;
+  const { levelIndex } = useQualityStore.getState();
+  return [levelIndex === QUALITY_LEVELS.length - 1 ? 0 : lower, levelIndex === 0 ? Infinity : upper];
+}
 
 /** Everything inside the canvas; reads the active document from the store. */
 function SceneContent({ cameraSetup }: { cameraSetup: CameraSetup }) {
@@ -29,33 +50,35 @@ function SceneContent({ cameraSetup }: { cameraSetup: CameraSetup }) {
   const materials = useSceneStore((state) => state.materials);
   const { shadowMapSize } = useQualityLevel();
   const apartment = useDeepStable(document?.apartment);
-  const lighting = useDeepStable(document?.lighting);
+  const lighting = useDeepStable(withDevLightingOverride(document?.lighting));
   const bounds = useMemo(() => (apartment ? apartmentBounds(apartment) : null), [apartment]);
   const sun = useMemo(
     () => (apartment && lighting ? sunSetup({ lighting, meta: apartment.meta, year: new Date().getFullYear() }) : null),
     [apartment?.meta, lighting],
   );
+  const levels = useMemo(() => (sun ? lightingLevels(sun) : null), [sun]);
 
-  if (!document || !apartment || !bounds || !sun) return null;
+  if (!document || !apartment || !bounds || !sun || !levels) return null;
   const [width, depth] = [bounds.max[0] - bounds.min[0], bounds.max[2] - bounds.min[2]];
 
   return (
     <>
-      <SkyEnvironment skyParams={sun.skyParams} environmentIntensity={0.25} backgroundIntensity={0.5} />
-      <hemisphereLight args={["#ffffff", "#d8cdb8", 0.7]} />
-      <SunLight sun={sun} bounds={bounds} shadowMapSize={shadowMapSize} />
+      <NeutralEnvironment intensity={levels.environmentIntensity} />
+      <SkyBackground skyParams={sun.skyParams} intensity={levels.backgroundIntensity} />
+      <hemisphereLight args={[levels.hemisphereSkyColor, levels.hemisphereGroundColor, levels.hemisphereIntensity]} />
+      <SunLight sun={sun} intensity={levels.sunIntensity} bounds={bounds} shadowMapSize={shadowMapSize} />
       <Ground />
       <ApartmentMeshes apartment={apartment} materials={materials} />
       <ItemsMeshes items={document.items} assets={assets} materials={materials} />
+      {/* frames=1 renders the depth once per re-render of this component, i.e. once per scene change. */}
       <ContactShadows
-        key={document.version}
-        position={[bounds.center[0], 0.002, bounds.center[2]]}
+        position={[bounds.center[0], CONTACT_SHADOW_LIFT_M, bounds.center[2]]}
         width={width}
         height={depth}
         far={CONTACT_SHADOW_REACH_M}
         resolution={CONTACT_SHADOW_RESOLUTION}
-        opacity={0.5}
-        blur={2}
+        opacity={CONTACT_SHADOW_OPACITY}
+        blur={CONTACT_SHADOW_BLUR}
         frames={1}
       />
       <DollhouseControls bounds={bounds} camera={cameraSetup} />
@@ -71,12 +94,26 @@ function useInitialCamera(): CameraSetup | null {
   return useMemo(() => (document ? initialCamera(appCamera, apartmentBounds(document.apartment)) : null), []);
 }
 
+/** Mounts the performance monitor only after the warm-up, so start-up hitches never cost quality. */
+function WarmedUpMonitor() {
+  const [isWarm, setIsWarm] = useState(false);
+  const stepDown = useQualityStore((state) => state.stepDown);
+  const stepUp = useQualityStore((state) => state.stepUp);
+  const settle = useQualityStore((state) => state.settle);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsWarm(true), MONITOR_WARMUP_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!isWarm) return null;
+  return <PerformanceMonitor bounds={monitorBounds} flipflops={MONITOR_MAX_FLIPFLOPS} onDecline={stepDown} onIncline={stepUp} onFallback={settle} />;
+}
+
 /** The R3F canvas with adaptive quality; fills its parent and has nothing drawn over it. */
 export function Viewport() {
   const { dpr } = useQualityLevel();
   const camera = useInitialCamera();
-  const stepDown = useQualityStore((state) => state.stepDown);
-  const stepUp = useQualityStore((state) => state.stepUp);
 
   useEffect(() => (import.meta.env.DEV ? installFrameStats(() => useQualityStore.getState().levelIndex) : undefined), []);
 
@@ -91,10 +128,9 @@ export function Viewport() {
         gl.transmissionResolutionScale = TRANSMISSION_RESOLUTION_SCALE;
       }}
     >
-      <PerformanceMonitor onDecline={stepDown} onIncline={stepUp}>
-        {camera && <SceneContent cameraSetup={camera} />}
-        <Effects />
-      </PerformanceMonitor>
+      <WarmedUpMonitor />
+      {camera && <SceneContent cameraSetup={camera} />}
+      <Effects />
     </Canvas>
   );
 }

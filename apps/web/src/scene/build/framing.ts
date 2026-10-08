@@ -1,4 +1,5 @@
 import type { Apartment, Vec3 } from "@app/core";
+import { wallDirection } from "./wallDirection.ts";
 
 export type Bounds = { min: Vec3; max: Vec3; center: Vec3; radius: number };
 export type CameraSetup = { position: Vec3; target: Vec3; fov: number };
@@ -8,9 +9,9 @@ const DOLLHOUSE_ELEVATION_RAD = Math.PI / 4;
 const FIT_MARGIN = 1.1;
 
 function wallCorners(wall: Apartment["walls"][number]): Array<[number, number]> {
-  const length = Math.hypot(wall.endX - wall.startX, wall.endZ - wall.startZ);
-  const halfX = (-(wall.endZ - wall.startZ) / length) * (wall.thickness / 2);
-  const halfZ = ((wall.endX - wall.startX) / length) * (wall.thickness / 2);
+  const [dirX, dirZ] = wallDirection(wall);
+  const halfX = -dirZ * (wall.thickness / 2);
+  const halfZ = dirX * (wall.thickness / 2);
   return [
     [wall.startX + halfX, wall.startZ + halfZ],
     [wall.startX - halfX, wall.startZ - halfZ],
@@ -19,9 +20,18 @@ function wallCorners(wall: Apartment["walls"][number]): Array<[number, number]> 
   ];
 }
 
+const EMPTY_APARTMENT_RADIUS_M = 5;
+
+/** Stand-in bounds for an apartment without walls and rooms, centred horizontally on the origin. */
+function emptyApartmentBounds(ceilingHeight: number): Bounds {
+  const r = EMPTY_APARTMENT_RADIUS_M;
+  return { min: [-r, 0, -r], max: [r, ceilingHeight, r], center: [0, ceilingHeight / 2, 0], radius: r };
+}
+
 /** Axis-aligned bounds over all walls (including thickness) and rooms, floor to ceiling. */
 export function apartmentBounds(apartment: Apartment): Bounds {
   const points = [...apartment.walls.flatMap(wallCorners), ...apartment.rooms.flatMap((room) => room.polygon)];
+  if (points.length === 0) return emptyApartmentBounds(apartment.meta.ceilingHeight);
   const xs = points.map(([x]) => x);
   const zs = points.map(([, z]) => z);
   const min: Vec3 = [Math.min(...xs), 0, Math.min(...zs)];

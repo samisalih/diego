@@ -1,18 +1,17 @@
 import { wallLength, type Room, type Wall } from "@app/core";
+import { wallDirection } from "./wallDirection.ts";
 
 // Room polygons follow the inner wall faces, so a bounding edge lies up to half a wall thickness off the centre line.
 const EDGE_TOLERANCE = 0.02;
 
 function distanceToWallLine(wall: Wall, [x, z]: [number, number]): number {
-  const length = wallLength(wall);
-  const dirX = (wall.endX - wall.startX) / length;
-  const dirZ = (wall.endZ - wall.startZ) / length;
+  const [dirX, dirZ] = wallDirection(wall);
   return Math.abs((x - wall.startX) * dirZ - (z - wall.startZ) * dirX);
 }
 
 function alongWall(wall: Wall, [x, z]: [number, number]): number {
-  const length = wallLength(wall);
-  return ((x - wall.startX) * (wall.endX - wall.startX) + (z - wall.startZ) * (wall.endZ - wall.startZ)) / length;
+  const [dirX, dirZ] = wallDirection(wall);
+  return (x - wall.startX) * dirX + (z - wall.startZ) * dirZ;
 }
 
 function edgeBoundsWall(wall: Wall, from: [number, number], to: [number, number]): boolean {

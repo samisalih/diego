@@ -4,15 +4,16 @@ import type { Bounds } from "./build/framing.ts";
 import type { SunSetup } from "./build/sun.ts";
 
 const FIT_MARGIN = 1.05;
+const LIGHT_DISTANCE_IN_RADII = 2;
 const SHADOW_BIAS = -0.0004;
 const SHADOW_NORMAL_BIAS = 0.02;
 
 /** The only shadow-casting light: a directional sun whose shadow frustum is fitted to the apartment bounds. */
-export function SunLight({ sun, bounds, shadowMapSize }: { sun: SunSetup; bounds: Bounds; shadowMapSize: number }) {
+export function SunLight({ sun, intensity, bounds, shadowMapSize }: { sun: SunSetup; intensity: number; bounds: Bounds; shadowMapSize: number }) {
   const lightRef = useRef<DirectionalLight>(null);
   const targetRef = useRef<Object3D>(null);
   const reach = bounds.radius * FIT_MARGIN;
-  const distance = reach * 2;
+  const distance = reach * LIGHT_DISTANCE_IN_RADII;
   const [x, y, z] = bounds.center;
   const [dx, dy, dz] = sun.direction;
   const color = new Color().setRGB(...sun.color, SRGBColorSpace);
@@ -32,18 +33,25 @@ export function SunLight({ sun, bounds, shadowMapSize }: { sun: SunSetup; bounds
     camera.updateProjectionMatrix();
   }, [reach, distance]);
 
+  // Changing the size keeps the light and its target; the old map is dropped so three allocates a new one.
+  useLayoutEffect(() => {
+    const light = lightRef.current;
+    if (!light) return;
+    light.shadow.mapSize.set(shadowMapSize, shadowMapSize);
+    light.shadow.map?.dispose();
+    light.shadow.map = null;
+  }, [shadowMapSize]);
+
   return (
     <>
       <object3D ref={targetRef} position={[x, y, z]} />
       <directionalLight
-        key={shadowMapSize}
         ref={lightRef}
         position={[x + dx * distance, y + dy * distance, z + dz * distance]}
         color={color}
-        intensity={sun.intensity}
-        visible={!sun.isNight}
+        intensity={intensity}
+        visible={intensity > 0}
         castShadow
-        shadow-mapSize={[shadowMapSize, shadowMapSize]}
         shadow-bias={SHADOW_BIAS}
         shadow-normalBias={SHADOW_NORMAL_BIAS}
       />

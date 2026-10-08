@@ -1,4 +1,5 @@
-import { wallLength, type Opening, type Vec3, type Wall } from "@app/core";
+import type { Opening, Vec3, Wall } from "@app/core";
+import { wallDirection } from "./wallDirection.ts";
 
 /** A box to render inside a wall hole, in world space; `size` is [along the wall, height, depth]. */
 export type OpeningFixture = {
@@ -14,9 +15,7 @@ const GLASS_THICKNESS = 0.01;
 
 /** Creates fixtures from boxes given in the hole's own frame: u along the wall from its start, v up. */
 function createFixtureFactory(wall: Wall) {
-  const length = wallLength(wall);
-  const dirX = (wall.endX - wall.startX) / length;
-  const dirZ = (wall.endZ - wall.startZ) / length;
+  const [dirX, dirZ] = wallDirection(wall);
   // three.js y-rotation maps local +x to (cos, 0, -sin), so the wall direction needs the negated angle.
   const rotationY = Math.atan2(-dirZ, dirX);
   return (kind: OpeningFixture["kind"], centerU: number, centerV: number, width: number, height: number, depth: number): OpeningFixture => ({

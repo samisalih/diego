@@ -1,12 +1,11 @@
 import type { Apartment as ApartmentData, Material, Opening, Room, Wall } from "@app/core";
+import { DoubleSide, type BufferGeometry } from "three";
 import { useEffect, useMemo } from "react";
-import type { BufferGeometry } from "three";
 import { buildCeilingGeometry, buildFloorGeometry } from "./build/rooms.ts";
 import { buildOpeningFixtures } from "./build/openings.ts";
 import { buildWallGeometry } from "./build/walls.ts";
 import { findWallMaterialId } from "./build/wallMaterial.ts";
 import { GlassMaterial, SurfaceMaterial } from "./Surfaces.tsx";
-import { useDeepStable } from "./useDeepStable.ts";
 
 type MaterialsById = ReadonlyMap<string, Material>;
 
@@ -52,16 +51,24 @@ function CeilingShadowCaster({ room, ceilingHeight }: { room: Room; ceilingHeigh
   const geometry = useDisposed(useMemo(() => buildCeilingGeometry(room, ceilingHeight), [room, ceilingHeight]));
   return (
     <mesh geometry={geometry} castShadow>
-      <meshBasicMaterial colorWrite={false} depthWrite={false} side={2} shadowSide={2} />
+      <meshBasicMaterial colorWrite={false} depthWrite={false} side={DoubleSide} shadowSide={DoubleSide} />
     </mesh>
   );
 }
 
-/** Walls with openings, floors, ceiling shadow casters and opening fixtures of the apartment. */
-export function ApartmentMeshes({ apartment: apartmentInput, materials }: { apartment: ApartmentData; materials: MaterialsById }) {
-  const apartment = useDeepStable(apartmentInput);
+const NO_OPENINGS: Opening[] = [];
+
+function groupByWallId(openings: Opening[]): Map<string, Opening[]> {
+  const grouped = new Map<string, Opening[]>();
+  for (const opening of openings) grouped.set(opening.wallId, [...(grouped.get(opening.wallId) ?? []), opening]);
+  return grouped;
+}
+
+/** Walls with openings, floors, ceiling shadow casters and opening fixtures; `apartment` must be reference-stable while its content is unchanged. */
+export function ApartmentMeshes({ apartment, materials }: { apartment: ApartmentData; materials: MaterialsById }) {
   const { walls, rooms, openings, meta } = apartment;
   const wallsById = useMemo(() => new Map(walls.map((wall) => [wall.id, wall])), [walls]);
+  const openingsByWallId = useMemo(() => groupByWallId(openings), [openings]);
 
   return (
     <group>
@@ -69,7 +76,7 @@ export function ApartmentMeshes({ apartment: apartmentInput, materials }: { apar
         <WallMesh
           key={wall.id}
           wall={wall}
-          openings={openings.filter((opening) => opening.wallId === wall.id)}
+          openings={openingsByWallId.get(wall.id) ?? NO_OPENINGS}
           ceilingHeight={meta.ceilingHeight}
           material={lookup(materials, findWallMaterialId(wall, rooms))}
         />
