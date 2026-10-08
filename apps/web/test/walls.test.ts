@@ -484,16 +484,13 @@ describe("buildWallGeometry", () => {
       expect(sumArea(capsAt(0))).toBeCloseTo(0.3 * HEIGHT, 4);
     });
 
-    // Red if the top face continues over the extension at the joined end.
-    it("has no top face over the extension at the joined end", () => {
+    // Red if the top face stops at the centre-line end: the corner would be open when seen from above.
+    it("extends the top face over the extension at the joined end", () => {
       expect(tops.length).toBeGreaterThan(0);
-      for (const t of tops) for (const p of t.positions) expect(frame.toLocal(p).u).toBeLessThanOrEqual(4 + EPS);
-    });
-
-    // Red if the top face is dropped over the main length of the wall or at the free end.
-    it("keeps the top face over the centre-line length", () => {
-      expect(sumArea(tops)).toBeCloseTo(4 * 0.3, 4);
-      expect(Math.min(...tops.flatMap((t) => t.positions.map((p) => frame.toLocal(p).u)))).toBeCloseTo(0, 5);
+      const us = tops.flatMap((t) => t.positions.map((p) => frame.toLocal(p).u));
+      expect(Math.max(...us)).toBeCloseTo(4.05, 5);
+      expect(Math.min(...us)).toBeCloseTo(0, 5);
+      expect(sumArea(tops)).toBeCloseTo(4.05 * 0.3, 4);
     });
 
     // Red if the side faces are no longer extended (the corner would open on the outside).
@@ -502,8 +499,8 @@ describe("buildWallGeometry", () => {
       expect(sumArea(front)).toBeCloseTo(4.05 * HEIGHT, 4);
     });
 
-    // Red if the cap logic is applied to seed corners wrongly: the seed's north wall has no caps and no top over its two joined ends.
-    it("has neither caps nor top overhang at both joined ends of the seed's north wall", () => {
+    // Red if the seed's north wall keeps caps at its joined ends, or its top does not span the extensions.
+    it("has no caps and a top face spanning both extensions on the seed's north wall", () => {
       const north = wallById("wall_north");
       const northFrame = localFrame(north);
       const northTriangles = getTriangles(buildWallGeometry(north, walls, openings, CEILING));
@@ -516,11 +513,23 @@ describe("buildWallGeometry", () => {
         }));
       expect(endCaps).toHaveLength(0);
       const northTops = northTriangles.filter((t) => t.positions.every((p) => Math.abs(p.y - CEILING) < EPS) && t.faceNormal.y > 0.99);
-      expect(sumArea(northTops)).toBeCloseTo(northFrame.length * north.thickness, 4);
-      for (const t of northTops) for (const p of t.positions) {
-        const { u } = northFrame.toLocal(p);
-        expect(u).toBeGreaterThanOrEqual(-EPS);
-        expect(u).toBeLessThanOrEqual(northFrame.length + EPS);
+      expect(sumArea(northTops)).toBeCloseTo((northFrame.length + north.thickness) * north.thickness, 4);
+    });
+
+    // Red if an outer corner seen from above has a hole: the square [0, 0.18]^2 must be covered by a top face of north or west.
+    it("covers the seed's outer corner square with a top face", () => {
+      const topBox = (id: string) => {
+        const wall = wallById(id);
+        const tops = getTriangles(buildWallGeometry(wall, walls, openings, CEILING))
+          .filter((t) => t.positions.every((p) => Math.abs(p.y - CEILING) < EPS) && t.faceNormal.y > 0.99);
+        const xs = tops.flatMap((t) => t.positions.map((p) => p.x));
+        const zs = tops.flatMap((t) => t.positions.map((p) => p.z));
+        return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+      };
+      const covers = (box: ReturnType<typeof topBox>, x: number, z: number) =>
+        x >= box.minX - EPS && x <= box.maxX + EPS && z >= box.minZ - EPS && z <= box.maxZ + EPS;
+      for (const [x, z] of [[0.02, 0.02], [0.16, 0.02], [0.02, 0.16], [0.16, 0.16]]) {
+        expect(covers(topBox("wall_north"), x!, z!) || covers(topBox("wall_west"), x!, z!), `${x},${z}`).toBe(true);
       }
     });
   });
