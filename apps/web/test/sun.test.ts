@@ -1,7 +1,7 @@
 import { sunLight, sunPosition, type ApartmentMeta, type Lighting } from "@app/core";
 import { SEED_DOCUMENT } from "../../../packages/core/src/seed/index.ts";
 import { describe, expect, it } from "vitest";
-import { exposureForSun, sunSetup } from "../src/scene/build/sun.ts";
+import { exposureForSun, lightingLevels, sunSetup } from "../src/scene/build/sun.ts";
 
 const { meta } = SEED_DOCUMENT.apartment;
 const YEAR = 2026;
@@ -152,5 +152,95 @@ describe("exposureForSun", () => {
   // Red if the exposure only reacts below the horizon (high sun must be exposed lower than a low sun).
   it("is strictly lower at high noon than at the horizon", () => {
     expect(exposureForSun(60)).toBeLessThan(exposureForSun(0));
+  });
+});
+
+describe("lightingLevels", () => {
+  // Finds the time (hours) on the seed day at which the sun is closest to the wanted altitude, on the rising branch.
+  function sunAt(altitudeDeg: number, lighting: Partial<Lighting> = {}) {
+    let best = setup({ time: 3, ...lighting });
+    for (let time = 2; time <= 7; time += 0.002) {
+      const candidate = setup({ time, ...lighting });
+      if (Math.abs(candidate.altitudeDeg - altitudeDeg) < Math.abs(best.altitudeDeg - altitudeDeg)) best = candidate;
+    }
+    return best;
+  }
+  const noon = setup({ time: 12.5, season: "summer" });
+  const night = setup({ time: 0, season: "summer" });
+  const keys = ["sunIntensity", "environmentIntensity", "backgroundIntensity", "hemisphereIntensity"] as const;
+
+  // Red if any level is negative, NaN or infinite at any time of the day.
+  it("returns non-negative finite intensities for every hour of every season", () => {
+    for (const season of ["winter", "spring", "summer", "autumn"] as const) {
+      for (let time = 0; time < 24; time += 0.5) {
+        const levels = lightingLevels(setup({ time, season }));
+        for (const key of keys) {
+          expect(Number.isFinite(levels[key]), `${key} ${season} ${time}`).toBe(true);
+          expect(levels[key], `${key} ${season} ${time}`).toBeGreaterThanOrEqual(0);
+        }
+      }
+    }
+  });
+
+  // Red if the scene goes black at night (dim but readable).
+  it("keeps environment and hemisphere light above 0 at night", () => {
+    const levels = lightingLevels(night);
+    expect(night.isNight).toBe(true);
+    expect(levels.environmentIntensity).toBeGreaterThan(0);
+    expect(levels.hemisphereIntensity).toBeGreaterThan(0);
+  });
+
+  // Red if the sun still lights the scene at night.
+  it("has no sun light at night", () => {
+    expect(lightingLevels(night).sunIntensity).toBe(0);
+  });
+
+  // Red if the day sun of the levels is detached from the sun setup (it may only be ramped down near the horizon, never boosted).
+  it("derives the high-sun intensity from the sun setup", () => {
+    const { sunIntensity } = lightingLevels(noon);
+    expect(noon.altitudeDeg).toBeGreaterThan(40);
+    expect(sunIntensity).toBeLessThanOrEqual(noon.intensity * (1 + 1e-9));
+    expect(sunIntensity).toBeGreaterThanOrEqual(noon.intensity * 0.9);
+  });
+
+  // Red if the hemisphere colours are missing or not usable colours (a #rrggbb string or an [r, g, b] triple in 0..1).
+  it.each([["noon", noon], ["night", night]])("returns usable hemisphere colours at %s", (_name, sun) => {
+    const levels = lightingLevels(sun);
+    for (const colour of [levels.hemisphereSkyColor, levels.hemisphereGroundColor] as unknown[]) {
+      if (typeof colour === "string") {
+        expect(colour).toMatch(/^#[0-9a-f]{6}$/i);
+      } else {
+        expect(Array.isArray(colour)).toBe(true);
+        expect(colour as number[]).toHaveLength(3);
+        for (const channel of colour as number[]) {
+          expect(Number.isFinite(channel)).toBe(true);
+          expect(channel).toBeGreaterThanOrEqual(0);
+          expect(channel).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  describe("continuity across the horizon (-1 degree vs +1 degree)", () => {
+    const below = sunAt(-1);
+    const above = sunAt(1);
+
+    it("compares setups that really are on both sides of the horizon", () => {
+      expect(below.altitudeDeg).toBeCloseTo(-1, 1);
+      expect(above.altitudeDeg).toBeCloseTo(1, 1);
+    });
+
+    // Red if environment, background or hemisphere jump: each may change by at most 50 % of the larger value.
+    it.each(["environmentIntensity", "backgroundIntensity", "hemisphereIntensity"] as const)("changes %s by at most half of the larger value", (key) => {
+      const a = lightingLevels(below)[key];
+      const b = lightingLevels(above)[key];
+      expect(Math.abs(a - b)).toBeLessThanOrEqual(0.5 * Math.max(a, b));
+    });
+
+    // Red if the sun light switches on with a step: its change across the horizon stays within 25 % of its noon value.
+    it("changes the sun intensity by at most a quarter of its noon value", () => {
+      const step = Math.abs(lightingLevels(above).sunIntensity - lightingLevels(below).sunIntensity);
+      expect(step).toBeLessThanOrEqual(0.25 * lightingLevels(noon).sunIntensity);
+    });
   });
 });

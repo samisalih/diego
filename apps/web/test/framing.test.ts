@@ -134,3 +134,27 @@ describe("dollhouseCamera", () => {
     expect(distance(big)).toBeGreaterThan(distance(small) * 3);
   });
 });
+
+describe("empty apartment", () => {
+  const empty: Apartment = { ...seed, rooms: [], walls: [], openings: [] };
+  const bounds = apartmentBounds(empty);
+
+  // Red if the bounds are NaN/Infinity (min of nothing).
+  it("returns finite fallback bounds", () => {
+    for (const value of [...bounds.min, ...bounds.max, ...bounds.center, bounds.radius]) expect(Number.isFinite(value)).toBe(true);
+    for (let i = 0; i < 3; i += 1) expect(bounds.min[i]!).toBeLessThanOrEqual(bounds.max[i]!);
+  });
+
+  // Red if the fallback is not centred on the origin (horizontally) or has a radius other than 5 m.
+  it("is centred on the origin with a radius of 5 m", () => {
+    expect(bounds.center[0]).toBeCloseTo(0, 6);
+    expect(bounds.center[2]).toBeCloseTo(0, 6);
+    expect(bounds.radius).toBe(5);
+  });
+
+  // Red if the camera for the fallback bounds is NaN.
+  it("gives a finite dollhouse camera", () => {
+    const camera = dollhouseCamera(bounds);
+    for (const value of [...camera.position, ...camera.target, camera.fov]) expect(Number.isFinite(value)).toBe(true);
+  });
+});

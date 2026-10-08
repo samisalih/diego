@@ -83,6 +83,17 @@ describe("data/store reducers", () => {
       expect(applyDocumentChange(readyState(3), { type: "delete", row: { id: "doc_other" } }).document?.id).toBe(SEED_DOCUMENT.id);
     });
 
+    // Red if versions are compared across ids: the active document B (version 1) must replace the stale A (version 5).
+    it("compares versions only when the ids match", () => {
+      const state = {
+        ...readyState(5),
+        appState: appStateFromRow(appStateRow({ active_document_id: "doc_b" })),
+      };
+      const next = applyDocumentChange(state, { type: "upsert", row: documentRow({ id: "doc_b", version: 1, name: "B" }) });
+      expect(next.document?.id).toBe("doc_b");
+      expect(next.document?.version).toBe(1);
+    });
+
     // Red if the reducer mutates the previous state (breaks change detection of the store).
     it("does not mutate the previous state", () => {
       const state = readyState(3);
@@ -192,11 +203,16 @@ describe("data/store reducers", () => {
       expect(result.state.appState?.activeDocumentId).toBeNull();
     });
 
-    // Red if the reducer swaps out the document itself (the caller reloads it).
-    it("leaves the document to the caller", () => {
-      const state = readyState(3);
-      const result = applyAppStateChange(state, { type: "upsert", row: appStateRow({ active_document_id: "doc_other" }) });
-      expect(result.state.document).toEqual(state.document);
+    // Red if the old document stays in place after the active document switched (the reload fills the new one).
+    it("clears the document when the active document changed", () => {
+      const result = applyAppStateChange(readyState(3), { type: "upsert", row: appStateRow({ active_document_id: "doc_other" }) });
+      expect(result.state.document).toBeNull();
+    });
+
+    // Red if the document is cleared although the active document did not change.
+    it("keeps the document when the active document did not change", () => {
+      const result = applyAppStateChange(readyState(3), { type: "upsert", row: appStateRow({ selection: ["item_sofa"] }) });
+      expect(result.state.document?.id).toBe(SEED_DOCUMENT.id);
     });
   });
 });
