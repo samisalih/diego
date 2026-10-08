@@ -30,7 +30,7 @@ const TRANSMISSION_RESOLUTION_SCALE = 0.5;
 const CONTACT_SHADOW_RESOLUTION = 512;
 const CONTACT_SHADOW_REACH_M = 0.6;
 const CONTACT_SHADOW_LIFT_M = 0.002;
-const CONTACT_SHADOW_OPACITY = 0.5;
+const CONTACT_SHADOW_OPACITY = 0.8;
 const CONTACT_SHADOW_BLUR = 2;
 const MONITOR_MAX_FLIPFLOPS = 3;
 // Hysteresis between stepping down and back up so a step never immediately undoes itself.

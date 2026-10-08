@@ -1,4 +1,4 @@
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 
 /**
@@ -10,6 +10,13 @@ export function RenderWarmup({ shadowKey }: { shadowKey: readonly unknown[] }) {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
   const camera = useThree((state) => state.camera);
+
+  // The outline effect makes the composer switch the renderer's autoClear off for good. Offscreen renders such as the
+  // contact shadow bake would then paint over their previous result and leave ghost trails of everything that moved.
+  // A negative priority runs before the bake and does not take over rendering (only positive priorities do).
+  useFrame(() => {
+    gl.autoClear = true;
+  }, -1);
 
   useEffect(() => {
     gl.shadowMap.autoUpdate = false;

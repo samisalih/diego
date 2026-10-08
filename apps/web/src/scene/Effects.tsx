@@ -1,19 +1,19 @@
 import { Bloom, EffectComposer, N8AO, Outline, SMAA, ToneMapping } from "@react-three/postprocessing";
-import { BlendFunction, ToneMappingMode } from "postprocessing";
+import { BlendFunction, KernelSize, ToneMappingMode } from "postprocessing";
 import { useOutlineTargets } from "./outlineTargets.ts";
 import { useQualityLevel } from "./quality.ts";
 import { tokenColor } from "./tokens.ts";
 
-const AO_RADIUS_M = 0.7;
-const AO_INTENSITY = 2.5;
+const AO_RADIUS_M = 0.35;
+const AO_INTENSITY = 1.4;
 const BLOOM_THRESHOLD = 1.6;
 const BLOOM_INTENSITY = 0.2;
 const BLOOM_SMOOTHING = 0.2;
-const AO_FALLOFF = 1;
+const AO_FALLOFF = 0.6;
 const AO_DENOISE_RADIUS = 12;
 const SELECTED_OUTLINE_LAYER = 10;
 const FLAGGED_OUTLINE_LAYER = 11;
-const OUTLINE_STRENGTH = 8;
+const OUTLINE_STRENGTH = 12;
 const OUTLINE_RESOLUTION_SCALE = 1;
 
 /**
@@ -31,8 +31,8 @@ export function Effects() {
       <Bloom mipmapBlur luminanceThreshold={BLOOM_THRESHOLD} luminanceSmoothing={BLOOM_SMOOTHING} intensity={BLOOM_INTENSITY} />
       <SMAA />
       <ToneMapping mode={ToneMappingMode.AGX} />
-      <Outline selection={selected} selectionLayer={SELECTED_OUTLINE_LAYER} visibleEdgeColor={tokenColor("--blue-bright")} xRay={false} resolutionScale={OUTLINE_RESOLUTION_SCALE} blendFunction={BlendFunction.ALPHA} edgeStrength={OUTLINE_STRENGTH} />
-      <Outline selection={flagged} selectionLayer={FLAGGED_OUTLINE_LAYER} visibleEdgeColor={tokenColor("--red")} xRay={false} resolutionScale={OUTLINE_RESOLUTION_SCALE} blendFunction={BlendFunction.ALPHA} edgeStrength={OUTLINE_STRENGTH} />
+      <Outline selection={selected} selectionLayer={SELECTED_OUTLINE_LAYER} visibleEdgeColor={tokenColor("--blue-bright")} hiddenEdgeColor={tokenColor("--blue")} xRay blur kernelSize={KernelSize.SMALL} resolutionScale={OUTLINE_RESOLUTION_SCALE} blendFunction={BlendFunction.ALPHA} edgeStrength={OUTLINE_STRENGTH} />
+      <Outline selection={flagged} selectionLayer={FLAGGED_OUTLINE_LAYER} visibleEdgeColor={tokenColor("--red")} hiddenEdgeColor={tokenColor("--red")} xRay blur kernelSize={KernelSize.SMALL} resolutionScale={OUTLINE_RESOLUTION_SCALE} blendFunction={BlendFunction.ALPHA} edgeStrength={OUTLINE_STRENGTH} />
     </EffectComposer>
   );
 }
