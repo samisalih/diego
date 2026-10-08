@@ -3,12 +3,16 @@ import { ContactShadows, PerformanceMonitor } from "@react-three/drei";
 import { useEffect, useMemo, useState } from "react";
 import { useSceneStore } from "../data/store.ts";
 import { installFrameStats, markFrameEvent } from "../dev/frameStats.ts";
+import { useEditorStore } from "../editor/editorStore.ts";
+import { useEffectiveItems, useLayoutAnalysis } from "../editor/layoutAnalysis.ts";
+import { outlineGroups } from "../editor/viewportFeedback.ts";
 import { ApartmentMeshes } from "./Apartment.tsx";
 import { apartmentBounds, type CameraSetup } from "./build/framing.ts";
 import { initialCamera } from "./build/initialCamera.ts";
 import { lightingLevels, sunSetup } from "./build/sun.ts";
 import { DollhouseControls } from "./DollhouseControls.tsx";
 import { Effects } from "./Effects.tsx";
+import { EditorOverlays } from "./EditorOverlays.tsx";
 import { RenderWarmup } from "./RenderWarmup.tsx";
 import { Ground } from "./Ground.tsx";
 import { ItemsMeshes } from "./Items.tsx";
@@ -16,6 +20,7 @@ import { QUALITY_LEVELS, useQualityLevel, useQualityStore } from "./quality.ts";
 import { NeutralEnvironment, SkyBackground } from "./SkyEnvironment.tsx";
 import { SunLight } from "./SunLight.tsx";
 import { useDeepStable } from "./useDeepStable.ts";
+import { useItemInteraction } from "./useItemInteraction.ts";
 import { withDevCameraOverride } from "../dev/cameraOverride.ts";
 import { withDevLightingOverride } from "../dev/lightingOverride.ts";
 
@@ -51,6 +56,10 @@ function SceneContent({ cameraSetup }: { cameraSetup: CameraSetup }) {
   const assets = useSceneStore((state) => state.assets);
   const materials = useSceneStore((state) => state.materials);
   const { shadowMapSize } = useQualityLevel();
+  const items = useEffectiveItems();
+  const analysis = useLayoutAnalysis();
+  const selectedIds = useEditorStore((state) => state.selection.selectedIds);
+  const handlers = useItemInteraction();
   const apartment = useDeepStable(document?.apartment);
   const lighting = useDeepStable(withDevLightingOverride(document?.lighting));
   const bounds = useMemo(() => (apartment ? apartmentBounds(apartment) : null), [apartment]);
@@ -59,6 +68,9 @@ function SceneContent({ cameraSetup }: { cameraSetup: CameraSetup }) {
     [apartment?.meta, lighting],
   );
   const levels = useMemo(() => (sun ? lightingLevels(sun) : null), [sun]);
+
+  const outlinesNow = useMemo(() => outlineGroups(items, selectedIds, analysis?.issues ?? []), [items, selectedIds, analysis]);
+  const outlines = useDeepStable(outlinesNow);
 
   if (!document || !apartment || !bounds || !sun || !levels) return null;
   const [width, depth] = [bounds.max[0] - bounds.min[0], bounds.max[2] - bounds.min[2]];
@@ -71,7 +83,8 @@ function SceneContent({ cameraSetup }: { cameraSetup: CameraSetup }) {
       <SunLight sun={sun} intensity={levels.sunIntensity} bounds={bounds} shadowMapSize={shadowMapSize} />
       <Ground />
       <ApartmentMeshes apartment={apartment} materials={materials} />
-      <ItemsMeshes items={document.items} assets={assets} materials={materials} />
+      <ItemsMeshes items={items} assets={assets} materials={materials} selectedIds={outlines.blueIds} flaggedIds={outlines.redIds} handlers={handlers} />
+      <EditorOverlays />
       {/* frames=1 renders the depth once per re-render of this component, i.e. once per scene change. */}
       <ContactShadows
         position={[bounds.center[0], CONTACT_SHADOW_LIFT_M, bounds.center[2]]}
@@ -84,7 +97,7 @@ function SceneContent({ cameraSetup }: { cameraSetup: CameraSetup }) {
         frames={1}
       />
       <DollhouseControls bounds={bounds} camera={cameraSetup} />
-      <RenderWarmup shadowKey={[document.items, apartment, assets, sun, levels.sunIntensity, shadowMapSize]} />
+      <RenderWarmup shadowKey={[items, apartment, assets, sun, levels.sunIntensity, shadowMapSize]} />
     </>
   );
 }
@@ -116,6 +129,11 @@ function WarmedUpMonitor() {
   return <PerformanceMonitor bounds={monitorBounds} flipflops={MONITOR_MAX_FLIPFLOPS} onDecline={stepDown} onIncline={stepUp} onFallback={settle} />;
 }
 
+function clearSelectionOnEmptyClick(event: MouseEvent): void {
+  if (event.shiftKey || event.metaKey || event.ctrlKey) return;
+  useEditorStore.getState().dispatchSelection({ type: "clear" });
+}
+
 /** The R3F canvas with adaptive quality; fills its parent and has nothing drawn over it. */
 export function Viewport() {
   const { dpr } = useQualityLevel();
@@ -140,6 +158,7 @@ export function Viewport() {
       dpr={dpr}
       gl={{ antialias: false, powerPreference: "high-performance" }}
       camera={camera ? { position: camera.position, fov: camera.fov, near: CAMERA_NEAR, far: CAMERA_FAR } : undefined}
+      onPointerMissed={clearSelectionOnEmptyClick}
       onCreated={({ gl }) => {
         gl.transmissionResolutionScale = TRANSMISSION_RESOLUTION_SCALE;
       }}

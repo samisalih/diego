@@ -4,6 +4,7 @@ import { App } from "./app/App.tsx";
 import "./styles/fonts.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
+import "./styles/editor.css";
 import { de } from "./i18n/de.ts";
 import { platform } from "./platform/index.ts";
 

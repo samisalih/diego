@@ -1,6 +1,18 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { signOut } from "../auth/signIn.ts";
+import { createLocalOnlyDocumentWriterDeps, createSupabaseDocumentWriterDeps } from "../data/documentWriterDeps.ts";
 import { useSceneStore } from "../data/store.ts";
+import { getSupabase } from "../data/supabaseClient.ts";
+import { installEditorDevHooks } from "../dev/editorDevHooks.ts";
+import { setEditorCommands } from "../editor/commandsRegistry.ts";
+import { createEditorCommands } from "../editor/commands.ts";
+import { EditorCommandsContext } from "../editor/EditorContext.tsx";
+import { ShortcutDialog } from "../editor/ShortcutDialog.tsx";
+import { SidePanel } from "../editor/SidePanel.tsx";
+import { Toolbar } from "../editor/Toolbar.tsx";
+import { useHistoryState } from "../editor/useHistoryState.ts";
+import { usePruneSelection, useSelectionSync } from "../editor/useSelectionSync.ts";
+import { useShortcuts } from "../editor/useShortcuts.ts";
 import { de } from "../i18n/de.ts";
 import { BrandMark } from "./BrandMark.tsx";
 import { Viewport } from "../scene/Viewport.tsx";
@@ -45,22 +57,56 @@ function ErrorStrip({ onRetry }: { onRetry?: () => void }) {
   );
 }
 
-/** The editor chrome (a flat top bar) around the viewport; `canSignOut` is false in fixture mode. */
-export function Editor({ canSignOut, onRetry }: { canSignOut: boolean; onRetry?: () => void }) {
+/** Dev only: fixture mode can preselect, preview a drag and run a simulated drag via URL parameters. */
+function useDevHooks(isFixture: boolean): void {
+  const hasDocument = useSceneStore((state) => state.document !== null);
+  useEffect(() => {
+    if (!import.meta.env.DEV || !isFixture || !hasDocument) return;
+    return installEditorDevHooks();
+  }, [isFixture, hasDocument]);
+}
+
+/**
+ * The editor chrome: top bar, toolbar, and below it the viewport next to the side panel.
+ * `canSignOut` is false in fixture mode, where edits stay local and nothing talks to Supabase.
+ */
+export function Editor({ canSignOut, onRetry, isFixture = false }: { canSignOut: boolean; onRetry?: () => void; isFixture?: boolean }) {
+  const client = useMemo(() => (isFixture ? null : getSupabase()), [isFixture]);
+  const commands = useMemo(
+    () => createEditorCommands(client ? createSupabaseDocumentWriterDeps(client) : createLocalOnlyDocumentWriterDeps(), { isHistoryEnabled: client !== null }),
+    [client],
+  );
+  const history = useHistoryState(client);
+  useEffect(() => {
+    setEditorCommands(commands);
+    return () => setEditorCommands(null);
+  }, [commands]);
+  useShortcuts(commands);
+  useSelectionSync(client);
+  usePruneSelection();
+  useDevHooks(isFixture);
+
   return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div className="top-bar-brand">
-          <BrandMark size="small" />
-          <p className="caps top-bar-title">{de.app.title}</p>
+    <EditorCommandsContext value={commands}>
+      <div className="app-shell">
+        <header className="top-bar">
+          <div className="top-bar-brand">
+            <BrandMark size="small" />
+            <p className="caps top-bar-title">{de.app.title}</p>
+          </div>
+          {canSignOut && <button className="button" type="button" onClick={() => void signOut()}>{de.auth.signOut}</button>}
+        </header>
+        <Toolbar history={history} />
+        <ErrorStrip onRetry={onRetry} />
+        <div className="editor-main">
+          <div className="viewport">
+            <SceneOrMessage onRetry={onRetry} />
+          </div>
+          <SidePanel />
         </div>
-        {canSignOut && <button className="button" type="button" onClick={() => void signOut()}>{de.auth.signOut}</button>}
-      </header>
-      <ErrorStrip onRetry={onRetry} />
-      <div className="viewport">
-        <SceneOrMessage onRetry={onRetry} />
+        <ShortcutDialog />
       </div>
-    </div>
+    </EditorCommandsContext>
   );
 }
 

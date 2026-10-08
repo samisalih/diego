@@ -8,7 +8,7 @@ function FixtureEditor() {
   useEffect(() => {
     void loadFixtureScene();
   }, []);
-  return <Editor canSignOut={false} />;
+  return <Editor canSignOut={false} isFixture />;
 }
 
 function SyncedEditor() {
