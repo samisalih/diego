@@ -74,7 +74,7 @@ create table if not exists public.materials (
   roughness_factor real not null default 1 check (roughness_factor >= 0 and roughness_factor <= 2),
   metalness_factor real check (metalness_factor >= 0 and metalness_factor <= 1),
   -- Shown until the maps are loaded.
-  fallback_color text not null default '#b8b0a4' check (fallback_color ~ '^#[0-9a-f]{6}$'),
+  fallback_color text not null default '#b8b0a4' check (fallback_color ~* '^#[0-9a-f]{6}$'),
   thumbnail_path text,
   content_hash text not null,
   trash_dependents jsonb,

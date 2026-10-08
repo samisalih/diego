@@ -3,8 +3,8 @@
 
 create schema if not exists private;
 
--- Single row holding the owner's auth user id. Filled manually once the owner account exists:
---   insert into private.owner (user_id) values ('<auth.users.id>');
+-- Single row holding the owner's auth user id. Filled automatically by the first account
+-- (see claim_first_owner at the end of this file).
 create table if not exists private.owner (
   id boolean primary key default true check (id),
   user_id uuid not null
@@ -31,6 +31,8 @@ $$;
 
 revoke all on function private.is_owner() from public, anon;
 -- Policies are evaluated as the calling role, so it needs schema usage and function execute.
+-- New functions in private must not become callable through the default PUBLIC execute grant.
+alter default privileges in schema private revoke execute on functions from public;
 grant usage on schema private to authenticated;
 grant execute on function private.is_owner() to authenticated;
 
@@ -115,3 +117,30 @@ create policy "planner_objects_delete_owner" on storage.objects
     bucket_id in ('thumbnails', 'reference-images', 'textures', 'models', 'photos')
     and (select private.is_owner())
   );
+
+-- The first account ever created becomes the owner. Sign-ups are disabled, so that account is the
+-- one created by hand in the dashboard; later accounts never gain access.
+create function private.claim_first_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into private.owner (user_id)
+  select new.id
+  where not exists (select 1 from private.owner);
+  return new;
+end;
+$$;
+
+revoke all on function private.claim_first_owner() from public, anon, authenticated;
+
+create trigger on_auth_user_created_claim_owner
+  after insert on auth.users
+  for each row execute function private.claim_first_owner();
+
+-- Covers an owner account that already existed before this migration ran.
+insert into private.owner (user_id)
+select id from auth.users order by created_at limit 1
+on conflict do nothing;
