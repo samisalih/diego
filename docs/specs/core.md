@@ -25,7 +25,7 @@ seed/  (phase a, task 7)
 
 - `ID_PREFIXES = ["doc","item","asset","part","mat","model","room","wall","opening"] as const`,
   `type IdPrefix`.
-- An id is `<prefix>_<body>`, body matches `[a-z0-9][a-z0-9_-]{1,63}`. Readable bodies are allowed and
+- An id is `<prefix>_<body>`, body matches `[a-z0-9][a-z0-9_-]{0,63}`. Readable bodies are allowed and
   encouraged for hand-written data (`room_living`, `asset_sofa`).
 - `createId(prefix)` → prefix + `_` + 10 random base36 chars (uses `crypto.getRandomValues`).
 - `isId(value, prefix)` → boolean. `idSchema(prefix)` → zod string schema enforcing the pattern.
@@ -38,7 +38,7 @@ Machine-readable errors used everywhere (UI fields, MCP responses, import):
 type ValidationIssue = { field: string; value: unknown; allowed: string; message: string };
 ```
 
-- `field` is a dotted path (`items.3.rotation`, `apartment.walls.wall_a.thickness` — array entries that
+- `field` is a dotted path (`items.item_sofa.rotation`, `apartment.walls.wall_a.thickness` — array entries that
   have an `id` are addressed by id, others by index).
 - `allowed` is a human-readable English description (`"number between 0.05 and 1"`,
   `"one of: window, door, balconyDoor"`).

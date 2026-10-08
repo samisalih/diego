@@ -3,7 +3,7 @@
 -- All ids are text with a prefix, generated in packages/core (see docs/specs/core.md section 1).
 
 create table if not exists public.documents (
-  id text primary key check (id ~ '^doc_[a-z0-9][a-z0-9_-]{1,63}$'),
+  id text primary key check (id ~ '^doc_[a-z0-9][a-z0-9_-]{0,63}$'),
   name text not null,
   source text not null check (source in ('user', 'ai', 'import')),
   apartment jsonb not null check (jsonb_typeof(apartment) = 'object'),
@@ -30,7 +30,7 @@ create table if not exists public.document_revisions (
 );
 
 create table if not exists public.assets (
-  id text primary key check (id ~ '^asset_[a-z0-9][a-z0-9_-]{1,63}$'),
+  id text primary key check (id ~ '^asset_[a-z0-9][a-z0-9_-]{0,63}$'),
   name text not null,
   category text not null,
   params jsonb not null default '[]' check (jsonb_typeof(params) = 'array'),
@@ -58,7 +58,7 @@ create table if not exists public.asset_revisions (
 );
 
 create table if not exists public.materials (
-  id text primary key check (id ~ '^mat_[a-z0-9][a-z0-9_-]{1,63}$'),
+  id text primary key check (id ~ '^mat_[a-z0-9][a-z0-9_-]{0,63}$'),
   name text not null,
   source text not null check (source in ('polyhaven', 'ambientcg', 'photo')),
   source_id text,
@@ -84,7 +84,7 @@ create table if not exists public.materials (
 );
 
 create table if not exists public.models (
-  id text primary key check (id ~ '^model_[a-z0-9][a-z0-9_-]{1,63}$'),
+  id text primary key check (id ~ '^model_[a-z0-9][a-z0-9_-]{0,63}$'),
   name text not null,
   source text not null check (source in ('upload', 'polyhaven', 'url')),
   source_id text,
