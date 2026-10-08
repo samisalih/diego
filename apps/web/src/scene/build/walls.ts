@@ -133,14 +133,15 @@ function addFaces(mesh: WallMesh, rectangles: Hole[], halfThickness: number): vo
   }
 }
 
-function addCaps(mesh: WallMesh, span: Interval, height: number, thickness: number, holes: Hole[]): void {
+/** Tops and bottoms of the span; the end caps are only added at free ends (a cap at a joined end would be coplanar with the joined wall's face). */
+function addCaps(mesh: WallMesh, span: Interval, height: number, thickness: number, holes: Hole[], freeEnds: { start: boolean; end: boolean }): void {
   const halfThickness = thickness / 2;
   const bottomGaps = mergeIntervals(holes.filter((hole) => hole.v0 <= 0).map((hole): Interval => [hole.u0, hole.u1]));
   const topGaps = mergeIntervals(holes.filter((hole) => hole.v1 >= height).map((hole): Interval => [hole.u0, hole.u1]));
   for (const [u0, u1] of subtractIntervals(span[0], span[1], bottomGaps)) mesh.addQuad([u0, 0, -halfThickness], alongU(u1 - u0), alongW(thickness));
   for (const [u0, u1] of subtractIntervals(span[0], span[1], topGaps)) mesh.addQuad([u0, height, -halfThickness], alongW(thickness), alongU(u1 - u0));
-  mesh.addQuad([span[0], 0, -halfThickness], alongW(thickness), alongV(height));
-  mesh.addQuad([span[1], 0, -halfThickness], alongV(height), alongW(thickness));
+  if (freeEnds.start) mesh.addQuad([span[0], 0, -halfThickness], alongW(thickness), alongV(height));
+  if (freeEnds.end) mesh.addQuad([span[1], 0, -halfThickness], alongV(height), alongW(thickness));
 }
 
 function addReveals(mesh: WallMesh, hole: Hole, height: number, thickness: number): void {
@@ -154,8 +155,8 @@ function addReveals(mesh: WallMesh, hole: Hole, height: number, thickness: numbe
 
 /**
  * Wall box along the centre line with a rectangular hole (including reveals) for every opening of the
- * wall. Ends that join another wall of `walls` are extended by half the wall's thickness; opening
- * offsets stay relative to the original start. UVs are in metres, normals point outwards, one index,
+ * wall. Ends that join another wall of `walls` are extended and get no end cap (editor spec
+ * section 7); opening offsets stay relative to the original start. UVs are in metres, normals point outwards, one index,
  * no groups.
  */
 export function buildWallGeometry(wall: Wall, walls: Wall[], openings: Opening[], ceilingHeight: number): BufferGeometry {
@@ -169,7 +170,7 @@ export function buildWallGeometry(wall: Wall, walls: Wall[], openings: Opening[]
   const span: Interval = [-extensions.start, length + extensions.end];
   const mesh = new WallMesh(wall);
   addFaces(mesh, faceRectangles(span, ceilingHeight, holes), wall.thickness / 2);
-  addCaps(mesh, span, ceilingHeight, wall.thickness, holes);
+  addCaps(mesh, span, ceilingHeight, wall.thickness, holes, { start: extensions.start === 0, end: extensions.end === 0 });
   for (const hole of holes) addReveals(mesh, hole, ceilingHeight, wall.thickness);
   return mesh.toGeometry();
 }

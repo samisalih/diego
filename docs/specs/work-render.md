@@ -139,7 +139,7 @@ Coordinate system: plan `(x, z)` = world `(x, z)`, `y` up, floor at `y = 0`, cei
 renderer objects in builders unless stated.
 
 ### 4.1 Walls — `walls.ts`
-`buildWallGeometry(wall, openings, ceilingHeight)` → `BufferGeometry`:
+`buildWallGeometry(wall, walls, openings, ceilingHeight)` → `BufferGeometry`:
 - a box along the wall's centre line from start to end, `thickness` deep, `0..ceilingHeight` high;
 - every opening of that wall (`opening.wallId === wall.id`) is a rectangular hole through the full
   thickness: along the wall from `offsetFromStart` to `offsetFromStart + width`, vertically from
@@ -148,18 +148,11 @@ renderer objects in builders unless stated.
 - UVs in metres on every face (1 UV unit = 1 m), so a material with `tileSize` t repeats every t m;
 - normals pointing outwards; the geometry has a `groups`-free single index.
 - Corners: a wall end that joins another wall (the end point lies within 1 mm of another wall's
-  end point or of its centre line) is extended along the wall direction by **half of its own
-  thickness**, so L-corners of the outer walls are closed (no notch) and interior walls run into the
-  outer wall without poking out of its outer face. Opening offsets stay relative to the original wall
-  start. `buildWallGeometry` therefore takes the full wall list: `buildWallGeometry(wall, walls,
-  openings, ceilingHeight)`.
-
-- Known limits, deferred to phase c (when the editor allows free wall thickness): the "half of its own
-  thickness" rule only closes corners cleanly for walls of equal thickness (a thicker wall overhangs a
-  thinner one by `(tA − tB)/2`; an interior wall thicker than the outer wall would poke through), and
-  extended ends leave coplanar end caps/top faces against the joined wall (z-fighting once adjacent walls
-  get different materials). Fix then: extend by half the *other* wall's thickness at L-joints, clamp to
-  `min(own, other)/2` at T-joints, and drop or inset end caps at joined ends.
+  end point or of its centre line) is extended along the wall direction and gets no end cap; the
+  extension length, cap and top-face rules are defined in `docs/specs/editor.md` section 7 (L-joint:
+  half the other wall's thickness; T-joint: `min(own, other) / 2`). Opening offsets stay relative to
+  the original wall start. `buildWallGeometry` therefore takes the full wall list:
+  `buildWallGeometry(wall, walls, openings, ceilingHeight)`.
 
 ### 4.2 Floors and ceilings — `rooms.ts`
 - `buildFloorGeometry(room)` → flat polygon at `y = 0`, normal `+y`, UVs = world `(x, z)` in metres.
