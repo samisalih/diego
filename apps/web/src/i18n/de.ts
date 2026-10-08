@@ -1,7 +1,8 @@
 // Every user-visible string of the app. German, by product decision.
 export const de = {
   app: {
-    title: "Wohnungsplaner",
+    title: "Diego",
+    logoAlt: "Diego-Logo",
     loading: "Wohnung wird geladen …",
   },
   auth: {

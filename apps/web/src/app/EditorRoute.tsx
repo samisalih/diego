@@ -12,9 +12,9 @@ function FixtureEditor() {
 }
 
 function SyncedEditor() {
-  const access = useSceneSync(true);
+  const { access, retry } = useSceneSync();
   if (access === "denied") return <NoAccess />;
-  return <Editor canSignOut />;
+  return <Editor canSignOut onRetry={retry} />;
 }
 
 export function EditorRoute() {

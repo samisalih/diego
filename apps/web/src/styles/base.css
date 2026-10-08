@@ -87,3 +87,7 @@ body {
 
 .form-error { margin: 0; color: var(--red); font-weight: 600; }
 .muted { color: var(--text-muted); margin: 0; }
+
+/* Logo next to the app name. */
+.brand-mark { display: block; width: auto; flex: none; }
+.top-bar-brand { display: flex; align-items: center; gap: 8px; }

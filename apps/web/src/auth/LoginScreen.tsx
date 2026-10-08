@@ -1,4 +1,5 @@
 import { useState, type SyntheticEvent } from "react";
+import { BrandMark } from "../app/BrandMark.tsx";
 import { de } from "../i18n/de.ts";
 import { signInWithPassword } from "./signIn.ts";
 
@@ -20,6 +21,7 @@ export function LoginScreen() {
   return (
     <main className="screen-center">
       <form className="panel" onSubmit={handleSubmit}>
+        <BrandMark size="large" />
         <h1 className="display">{de.app.title}</h1>
         <div className={fieldClass}>
           <label className="caps" htmlFor="login-email">{de.auth.email}</label>
