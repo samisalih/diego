@@ -147,7 +147,12 @@ renderer objects in builders unless stated.
   hole) are part of the geometry;
 - UVs in metres on every face (1 UV unit = 1 m), so a material with `tileSize` t repeats every t m;
 - normals pointing outwards; the geometry has a `groups`-free single index.
-- Corners: walls are built as-is from their centre lines; overlaps at corners are acceptable in phase b.
+- Corners: a wall end that joins another wall (the end point lies within 1 mm of another wall's
+  end point or of its centre line) is extended along the wall direction by **half of its own
+  thickness**, so L-corners of the outer walls are closed (no notch) and interior walls run into the
+  outer wall without poking out of its outer face. Opening offsets stay relative to the original wall
+  start. `buildWallGeometry` therefore takes the full wall list: `buildWallGeometry(wall, walls,
+  openings, ceilingHeight)`.
 
 ### 4.2 Floors and ceilings — `rooms.ts`
 - `buildFloorGeometry(room)` → flat polygon at `y = 0`, normal `+y`, UVs = world `(x, z)` in metres.
