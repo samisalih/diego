@@ -26,3 +26,8 @@ export * from "./toon.ts";
 export * from "./schemas/export.ts";
 export * from "./export/bundle.ts";
 export * from "./export/import.ts";
+export * from "./operations/result.ts";
+export * from "./operations/apartment.ts";
+export * from "./operations/items.ts";
+export * from "./operations/lighting.ts";
+export * from "./operations/asset.ts";
