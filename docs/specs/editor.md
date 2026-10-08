@@ -99,8 +99,12 @@ CommitResult = { ok: true; version: number } | { ok: false; reason: "invalid"; i
   new content).
 
 ### 2.2 Realtime echo
-The store reducer already accepts a document event whose version is ≥ the local one; after a local save
-the echo carries the same content and version — no flicker. Remote edits (Claude) arrive the same way.
+The store reducer accepts a document event only when its version is **strictly greater** than the local
+one. After a local save the local document already carries the returned version, so the echo of that
+save (same version) is ignored — it can only be equal or stale, and accepting it would overwrite the
+optimistic state of a follow-up commit (flicker). Remote edits (Claude) arrive with a higher version.
+`applyLocal` from the writer is guarded the same way: it applies only when the store's document has the
+same id and a version not higher than the one being applied.
 
 ### 2.3 History state
 `useHistoryState()` → `{ canUndo, canRedo }` from `document_history_state`, refreshed after every
@@ -221,8 +225,9 @@ tested).
 
 ### 6.1 Core: `itemClearances(content, assets, itemId)` (new, `packages/core/src/geometry/clearance.ts`, tested)
 - For the item's OBB (core `itemObb`): from the midpoint of each of its 4 sides, a ray along the side's
-  outward normal in the plan; distance to the first wall OBB face hit (walls only, openings ignored —
-  a ray through an opening span continues to the next wall); max 20 m, no hit → no entry.
+  outward normal in the plan; distance to the first wall OBB face hit (walls only; openings do **not**
+  let the ray pass — facing a door, the distance is measured to the doorway's wall plane); max 20 m, no
+  hit → no entry.
 - Returns `{ side: "front" | "back" | "left" | "right"; distance: number; from: Vec2; to: Vec2;
   wallId: string }[]` (front = local +z).
 - Exported from `@app/core` (used by Claude in phase i too).
