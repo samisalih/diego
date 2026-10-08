@@ -162,7 +162,7 @@ describe("dragPatches", () => {
 
 describe("dragPatches floating-point cleanliness", () => {
   // The patch values are written to the database; they must be exactly the decimal the grid names, e.g. 2.57, not 2.5700000000000003.
-  const isOnGrid = (value: number, decimals: number): boolean => Number(value.toFixed(decimals)) === value;
+  const isOnGrid = (value: number | undefined, decimals: number): boolean => value !== undefined && Number(value.toFixed(decimals)) === value;
 
   // Red if the snapped position is computed as round(v / step) * step (257 * 0.01 = 2.5700000000000003).
   it("returns exactly representable positions at the fine step", () => {
@@ -186,11 +186,11 @@ describe("dragPatches floating-point cleanliness", () => {
     for (let start = 0; start <= 60; start += 1) {
       for (let step = 0; step <= 40; step += 1) {
         const [fine] = dragPatches([item("item_a", start / 10 + 0.03, start / 7)], ["item_a"], [step * 0.037, -step * 0.013], SNAP_STEP_FINE_M);
-        expect(isOnGrid(fine!.x, 2), `fine x start=${start} step=${step}: ${fine!.x}`).toBe(true);
-        expect(isOnGrid(fine!.z, 2), `fine z start=${start} step=${step}: ${fine!.z}`).toBe(true);
+        expect(isOnGrid(fine?.x, 2), `fine x start=${start} step=${step}: ${fine?.x}`).toBe(true);
+        expect(isOnGrid(fine?.z, 2), `fine z start=${start} step=${step}: ${fine?.z}`).toBe(true);
         const [coarse] = dragPatches([item("item_a", start / 10 + 0.03, start / 7)], ["item_a"], [step * 0.037, -step * 0.013], SNAP_STEP_COARSE_M);
-        expect(isOnGrid(coarse!.x, 1), `coarse x start=${start} step=${step}: ${coarse!.x}`).toBe(true);
-        expect(isOnGrid(coarse!.z, 1), `coarse z start=${start} step=${step}: ${coarse!.z}`).toBe(true);
+        expect(isOnGrid(coarse?.x, 1), `coarse x start=${start} step=${step}: ${coarse?.x}`).toBe(true);
+        expect(isOnGrid(coarse?.z, 1), `coarse z start=${start} step=${step}: ${coarse?.z}`).toBe(true);
       }
     }
   });
