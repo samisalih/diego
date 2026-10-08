@@ -1,19 +1,13 @@
-import type { AppState, Asset, Material } from "@app/core";
 import { platform } from "../platform/index.ts";
-import type { PlannerDocument } from "./mappers.ts";
-import { useSceneStore, type SceneData } from "./store.ts";
+import { parseCachedScene } from "./sync.ts";
+import { EMPTY_SCENE_DATA, useSceneStore, type SceneData } from "./store.ts";
 
-const CACHE_KEY = "scene-data";
+// Bump the version when the snapshot shape changes; old snapshots are then simply never read.
+const CACHE_KEY = "scene-data:v1";
+const LEGACY_CACHE_KEY = "scene-data";
 const WRITE_DELAY_MS = 500;
 
-type SceneSnapshot = {
-  appState: AppState;
-  document: PlannerDocument | null;
-  assets: Asset[];
-  materials: Material[];
-};
-
-function toSnapshot(state: SceneData): SceneSnapshot | null {
+function toSnapshot(state: SceneData) {
   if (state.status !== "ready" || !state.appState) return null;
   return {
     appState: state.appState,
@@ -23,20 +17,18 @@ function toSnapshot(state: SceneData): SceneSnapshot | null {
   };
 }
 
-/** Puts the last cached snapshot into the store so something is on screen while the network load runs. */
+/** Puts the cached snapshot into the store as a placeholder until the first network load lands. */
 export function restoreCachedScene(): void {
-  const snapshot = platform.cache.get<SceneSnapshot>(CACHE_KEY);
-  if (!snapshot) return;
-  useSceneStore.getState().setSceneData({
-    appState: snapshot.appState,
-    document: snapshot.document,
-    assets: new Map(snapshot.assets.map((asset) => [asset.id, asset])),
-    materials: new Map(snapshot.materials.map((material) => [material.id, material])),
-  });
+  platform.cache.remove(LEGACY_CACHE_KEY);
+  const scene = parseCachedScene(platform.cache.get<unknown>(CACHE_KEY));
+  if (scene) useSceneStore.getState().setSceneData(scene);
+  else platform.cache.remove(CACHE_KEY);
 }
 
-export function clearCachedScene(): void {
+/** Drops the cache and the in-memory scene; runs on every SIGNED_OUT event. */
+export function resetSceneOnSignOut(): void {
   platform.cache.remove(CACHE_KEY);
+  useSceneStore.getState().setSceneData(EMPTY_SCENE_DATA);
 }
 
 /** Writes the snapshot after every change of the loaded scene (debounced); returns the stop function. */

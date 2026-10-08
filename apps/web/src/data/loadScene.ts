@@ -14,9 +14,8 @@ export type LoadedScene = {
 /** `null` means the session can read no app_state row, i.e. it is not the owner. */
 export type SceneLoadResult = LoadedScene | null;
 
-async function selectRows(client: SupabaseClient, table: string, filter?: (query: any) => any): Promise<DbRow[]> {
-  const query = client.from(table).select("*");
-  const { data, error } = await (filter ? filter(query) : query);
+async function selectLiveRows(client: SupabaseClient, table: "assets" | "materials"): Promise<DbRow[]> {
+  const { data, error } = await client.from(table).select("*").is("deleted_at", null);
   if (error) throw new Error(`Loading ${table} failed: ${error.message}`);
   return data as DbRow[];
 }
@@ -53,11 +52,10 @@ function mapRows<T extends { id: string }>(rows: DbRow[], map: (row: DbRow) => T
 export async function loadScene(client: SupabaseClient): Promise<SceneLoadResult> {
   const appState = await loadAppState(client);
   if (!appState) return null;
-  const notDeleted = (query: any) => query.is("deleted_at", null);
   const [document, assetRows, materialRows] = await Promise.all([
     loadDocument(client, appState.activeDocumentId),
-    selectRows(client, "assets", notDeleted),
-    selectRows(client, "materials", notDeleted),
+    selectLiveRows(client, "assets"),
+    selectLiveRows(client, "materials"),
   ]);
   return {
     appState,

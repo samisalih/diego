@@ -10,7 +10,7 @@ export function isFixtureMode(): boolean {
 /** Fills the store from the core seed data (documents, assets, materials) without any network access. */
 export async function loadFixtureScene(): Promise<void> {
   if (!import.meta.env.DEV) return;
-  const { SEED_DOCUMENT, SEED_ASSETS, SEED_MATERIALS } = await import("../../../../packages/core/src/seed/index.ts");
+  const { SEED_DOCUMENT, SEED_ASSETS, SEED_MATERIALS } = await import("@app/core/seed");
   const appState = appStateSchema.parse({
     mode: "editor",
     activeDocumentId: SEED_DOCUMENT.id,

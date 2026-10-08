@@ -33,7 +33,7 @@ function upsertOrRemove<T>(map: Map<string, T>, id: string, value: T | null): Ma
 }
 
 /** The state type after a document change: the document may be set or cleared whatever it was before. */
-type WithDocument<S extends SceneData> = Omit<S, "document"> & Pick<SceneData, "document">;
+export type WithDocument<S extends SceneData> = Omit<S, "document"> & Pick<SceneData, "document">;
 
 /** Applies a `documents` change; only the active document is kept and stale versions are ignored. */
 export function applyDocumentChange<S extends SceneData>(state: S, change: RowChange): WithDocument<S> {
@@ -42,7 +42,7 @@ export function applyDocumentChange<S extends SceneData>(state: S, change: RowCh
   if (change.type === "delete") return { ...state, document: null };
   const incoming = documentFromRow(change.row);
   if (incoming === null) return { ...state, document: null };
-  if (state.document && incoming.version < state.document.version) return state;
+  if (state.document?.id === incoming.id && incoming.version < state.document.version) return state;
   return { ...state, document: incoming };
 }
 
@@ -61,11 +61,12 @@ export function applyMaterialChange<S extends SceneData>(state: S, change: RowCh
 }
 
 /** Applies an `app_state` change; the caller reloads the document when `needsDocumentReload` is set. */
-export function applyAppStateChange<S extends SceneData>(state: S, change: RowChange): { state: S; needsDocumentReload: boolean } {
+export function applyAppStateChange<S extends SceneData>(state: S, change: RowChange): { state: WithDocument<S>; needsDocumentReload: boolean } {
   if (change.type === "delete") return { state, needsDocumentReload: false };
   const appState = appStateFromRow(change.row);
-  const needsDocumentReload = appState.activeDocumentId !== (state.appState?.activeDocumentId ?? undefined);
-  return { state: { ...state, appState }, needsDocumentReload };
+  const needsDocumentReload = appState.activeDocumentId !== (state.appState?.activeDocumentId ?? null);
+  // The old document no longer belongs to the active one; the caller's reload fills the new one.
+  return { state: needsDocumentReload ? { ...state, appState, document: null } : { ...state, appState }, needsDocumentReload };
 }
 
 type SceneActions = {

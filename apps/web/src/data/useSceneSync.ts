@@ -1,80 +1,114 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { de } from "../i18n/de.ts";
-import { clearCachedScene, restoreCachedScene, startCachePersistence } from "./sceneCache.ts";
 import { loadDocument, loadScene } from "./loadScene.ts";
-import { startRealtimeSync, type SyncedTable } from "./realtimeSync.ts";
-import { EMPTY_SCENE_DATA, useSceneStore, type RowChange } from "./store.ts";
+import { restoreCachedScene, startCachePersistence } from "./sceneCache.ts";
+import { startRealtimeSync } from "./realtimeSync.ts";
+import { EMPTY_SCENE_DATA, useSceneStore, type SceneData } from "./store.ts";
 import { getSupabase } from "./supabaseClient.ts";
+import { acceptReloadedDocument, mergeLoadResult, type TableChange } from "./sync.ts";
 
 export type DataAccess = "unknown" | "granted" | "denied";
 
-function applyChange(table: SyncedTable, change: RowChange, reloadDocument: () => void): void {
-  const store = useSceneStore.getState();
-  try {
-    if (table === "documents") store.applyDocumentChange(change);
-    else if (table === "assets") store.applyAssetChange(change);
-    else if (table === "materials") store.applyMaterialChange(change);
-    else if (store.applyAppStateChange(change)) reloadDocument();
-  } catch (error) {
-    console.error(`Ignoring invalid ${table} change`, error);
-  }
-}
+export type SceneSync = {
+  access: DataAccess;
+  /** Runs a full load again, e.g. from the retry button of the error state. */
+  retry: () => void;
+};
 
-/** Keeps the scene store in sync with Supabase while `enabled` (a session exists); returns whether the data is readable. */
-export function useSceneSync(enabled: boolean): DataAccess {
+const currentScene = (): SceneData => useSceneStore.getState();
+
+/**
+ * Keeps the scene store in sync with Supabase for as long as the component is mounted. The channel is
+ * subscribed first and a full load runs on every SUBSCRIBED; changes arriving during a load are buffered
+ * and replayed on top of its result, and only the newest load is applied.
+ */
+export function useSceneSync(): SceneSync {
   const [access, setAccess] = useState<DataAccess>("unknown");
+  const loadRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
-    if (!enabled) return;
     const client = getSupabase();
-    const store = useSceneStore.getState();
-    let isCancelled = false;
+    let isStopped = false;
+    let latestLoadId = 0;
+    let isLoading = false;
+    let buffered: TableChange[] = [];
 
     const reloadDocument = async (): Promise<void> => {
       try {
-        const document = await loadDocument(client, useSceneStore.getState().appState?.activeDocumentId ?? null);
-        if (!isCancelled) useSceneStore.getState().setSceneData({ document });
+        const document = await loadDocument(client, currentScene().appState?.activeDocumentId ?? null);
+        if (!isStopped) useSceneStore.setState(acceptReloadedDocument(currentScene(), document));
       } catch (error) {
         console.error("Reloading the active document failed", error);
       }
     };
 
-    const reload = async (): Promise<void> => {
+    const applyLoaded = (loaded: SceneData): void => {
+      const merged = mergeLoadResult(loaded, buffered);
+      buffered = [];
+      isLoading = false;
+      useSceneStore.setState(merged.state);
+      if (merged.needsDocumentReload) void reloadDocument();
+    };
+
+    const load = async (): Promise<void> => {
+      const loadId = ++latestLoadId;
+      isLoading = true;
+      buffered = [];
       try {
-        const loaded = await loadScene(client);
-        if (isCancelled) return;
-        if (!loaded) {
+        const result = await loadScene(client);
+        if (isStopped || loadId !== latestLoadId) return;
+        if (!result) {
+          isLoading = false;
           setAccess("denied");
-          useSceneStore.getState().setSceneData({ ...EMPTY_SCENE_DATA, status: "ready" });
-          clearCachedScene();
+          useSceneStore.setState({ ...EMPTY_SCENE_DATA, status: "ready" });
           return;
         }
-        // A realtime event may have delivered a newer document while the load was in flight.
-        const current = useSceneStore.getState().document;
-        const isStale = current && loaded.document?.id === current.id && current.version > loaded.document.version;
         setAccess("granted");
-        useSceneStore.getState().setSceneData({ ...loaded, document: isStale ? current : loaded.document, status: "ready", error: null });
+        applyLoaded({ ...result, status: "ready", error: null });
       } catch (error) {
         console.error("Loading the scene failed", error);
-        if (!isCancelled) useSceneStore.getState().setError(de.data.loadFailed);
+        if (isStopped || loadId !== latestLoadId) return;
+        isLoading = false;
+        buffered = [];
+        useSceneStore.getState().setError(de.data.loadFailed);
       }
+    };
+    loadRef.current = () => {
+      useSceneStore.getState().setLoading();
+      void load();
+    };
+
+    const handleChange = (tableChange: TableChange): void => {
+      if (isLoading) {
+        buffered.push(tableChange);
+        return;
+      }
+      const result = mergeLoadResult(currentScene(), [tableChange]);
+      useSceneStore.setState(result.state);
+      if (result.needsDocumentReload) void reloadDocument();
     };
 
     restoreCachedScene();
-    store.setLoading();
+    useSceneStore.getState().setLoading();
     const stopCache = startCachePersistence();
     const stopRealtime = startRealtimeSync(client, {
-      onChange: (table, change) => applyChange(table, change, () => void reloadDocument()),
-      onReconnect: () => void reload(),
+      onChange: (tableChange) => {
+        try {
+          handleChange(tableChange);
+        } catch (error) {
+          console.error(`Ignoring invalid ${tableChange.table} change`, error);
+        }
+      },
+      onSubscribed: () => void load(),
     });
-    void reload();
 
     return () => {
-      isCancelled = true;
+      isStopped = true;
       stopRealtime();
       stopCache();
     };
-  }, [enabled]);
+  }, []);
 
-  return enabled ? access : "unknown";
+  const retry = useCallback(() => loadRef.current(), []);
+  return { access, retry };
 }
