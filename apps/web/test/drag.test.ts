@@ -159,3 +159,46 @@ describe("dragPatches", () => {
     expect(items).toEqual(snapshot);
   });
 });
+
+describe("dragPatches floating-point cleanliness", () => {
+  // The patch values are written to the database; they must be exactly the decimal the grid names, e.g. 2.57, not 2.5700000000000003.
+  const isOnGrid = (value: number, decimals: number): boolean => Number(value.toFixed(decimals)) === value;
+
+  // Red if the snapped position is computed as round(v / step) * step (257 * 0.01 = 2.5700000000000003).
+  it("returns exactly representable positions at the fine step", () => {
+    const [patch] = dragPatches([item("item_a", 2.3, 3.1)], ["item_a"], [0.27, 0.57], 0.01);
+    expect(patch!.x).toBe(2.57);
+    expect(patch!.z).toBe(3.67);
+  });
+
+  // Red if the coarse step produces artefacts such as 0.30000000000000004 or 0.7000000000000001.
+  it("returns exactly representable positions at the coarse step", () => {
+    const [first] = dragPatches([item("item_a", 0.2, 0.6)], ["item_a"], [0.1, 0.1], 0.1);
+    expect(first!.x).toBe(0.3);
+    expect(first!.z).toBe(0.7);
+    const [second] = dragPatches([item("item_a", 2.3, 4.1)], ["item_a"], [0.27, 0.27], 0.1);
+    expect(second!.x).toBe(2.6);
+    expect(second!.z).toBe(4.4);
+  });
+
+  // Red if any position on a sweep of starts and deltas carries a floating-point artefact.
+  it("never carries artefacts over a sweep of starts and deltas", () => {
+    for (let start = 0; start <= 60; start += 1) {
+      for (let step = 0; step <= 40; step += 1) {
+        const [fine] = dragPatches([item("item_a", start / 10 + 0.03, start / 7)], ["item_a"], [step * 0.037, -step * 0.013], SNAP_STEP_FINE_M);
+        expect(isOnGrid(fine!.x, 2), `fine x start=${start} step=${step}: ${fine!.x}`).toBe(true);
+        expect(isOnGrid(fine!.z, 2), `fine z start=${start} step=${step}: ${fine!.z}`).toBe(true);
+        const [coarse] = dragPatches([item("item_a", start / 10 + 0.03, start / 7)], ["item_a"], [step * 0.037, -step * 0.013], SNAP_STEP_COARSE_M);
+        expect(isOnGrid(coarse!.x, 1), `coarse x start=${start} step=${step}: ${coarse!.x}`).toBe(true);
+        expect(isOnGrid(coarse!.z, 1), `coarse z start=${start} step=${step}: ${coarse!.z}`).toBe(true);
+      }
+    }
+  });
+
+  // Red if negative zero leaks out (a position snapped from -0.004 would print as -0).
+  it("does not produce negative zero", () => {
+    const [patch] = dragPatches([item("item_a", 0.01, 0.01)], ["item_a"], [-0.014, -0.014], 0.01);
+    expect(Object.is(patch!.x, -0)).toBe(false);
+    expect(Object.is(patch!.z, -0)).toBe(false);
+  });
+});

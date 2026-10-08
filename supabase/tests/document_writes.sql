@@ -214,6 +214,57 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
+-- 3b. A NULL expected version is a version conflict, never "no check": P0409, nothing changes
+-- ---------------------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  caught_state text;
+  caught_message text;
+  before_version int := pg_temp.row_version();
+  before_snapshot jsonb := pg_temp.row_snapshot();
+  before_revisions jsonb := pg_temp.revision_snapshots();
+begin
+  begin
+    perform public.save_document(
+      'doc_test_writes_1', null, 'NULLVERSION',
+      '{"marker": "null_version"}'::jsonb, '[]'::jsonb, '{"t": 98}'::jsonb, 'user');
+  exception when others then
+    caught_state := sqlstate;
+    get stacked diagnostics caught_message = message_text;
+  end;
+  perform pg_temp.assert_true(caught_state = 'P0409' and caught_message = 'version_conflict', 'save with a NULL expected version raises P0409 version_conflict');
+  perform pg_temp.assert_true(pg_temp.row_version() = before_version, 'save with a NULL expected version leaves the version unchanged');
+  perform pg_temp.assert_true(pg_temp.row_snapshot() = before_snapshot, 'save with a NULL expected version leaves the content unchanged');
+  perform pg_temp.assert_true(pg_temp.revision_snapshots() = before_revisions, 'save with a NULL expected version writes no revision');
+
+  caught_state := null;
+  caught_message := null;
+  begin
+    perform public.undo_document('doc_test_writes_1', null);
+  exception when others then
+    caught_state := sqlstate;
+    get stacked diagnostics caught_message = message_text;
+  end;
+  perform pg_temp.assert_true(caught_state = 'P0409' and caught_message = 'version_conflict', 'undo with a NULL expected version raises P0409 version_conflict');
+  perform pg_temp.assert_true(pg_temp.row_version() = before_version and pg_temp.row_snapshot() = before_snapshot, 'undo with a NULL expected version changes nothing');
+  perform pg_temp.assert_true(pg_temp.revision_snapshots() = before_revisions, 'undo with a NULL expected version writes no revision');
+
+  caught_state := null;
+  caught_message := null;
+  begin
+    perform public.redo_document('doc_test_writes_1', null);
+  exception when others then
+    caught_state := sqlstate;
+    get stacked diagnostics caught_message = message_text;
+  end;
+  perform pg_temp.assert_true(caught_state = 'P0409' and caught_message = 'version_conflict', 'redo with a NULL expected version raises P0409 version_conflict');
+  perform pg_temp.assert_true(pg_temp.row_version() = before_version and pg_temp.row_snapshot() = before_snapshot, 'redo with a NULL expected version changes nothing');
+  perform pg_temp.assert_true(pg_temp.revision_snapshots() = before_revisions, 'redo with a NULL expected version writes no revision');
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------------------
 -- 4. document_history_state before any undo
 -- ---------------------------------------------------------------------------------------------------------------
 

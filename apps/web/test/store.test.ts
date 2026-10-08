@@ -33,10 +33,22 @@ describe("data/store reducers", () => {
       expect(next.document?.version).toBe(4);
     });
 
-    // Red if the comparison is > instead of >= (spec: row.version >= current.version).
-    it("accepts an event with the same version", () => {
-      const next = applyDocumentChange(readyState(3), { type: "upsert", row: documentRow({ version: 3, items: movedItems(4) }) });
-      expect(sofaX(next)).toBe(4);
+    // Red if the comparison is >= instead of > (spec 2.2: strictly greater; the echo of a local save has the same version).
+    it("ignores an event with the same version", () => {
+      const state = readyState(3);
+      const next = applyDocumentChange(state, { type: "upsert", row: documentRow({ version: 3, items: movedItems(4) }) });
+      expect(sofaX(next)).toBe(SEED_DOCUMENT.items.find((item) => item.id === "item_sofa")!.x);
+      expect(next.document?.version).toBe(3);
+    });
+
+    // Red if the echo of an earlier save (R1 at N+1) overwrites the optimistic content R2 of a follow-up commit
+    // (R2 is applied locally at version N+1 before its own save returns) - the flicker of spec 2.2.
+    it("keeps the optimistic content when the echo of the previous save arrives at the same version", () => {
+      const optimistic = { ...readyState(4).document!, items: movedItems(2.5) };
+      const state = { ...readyState(4), document: optimistic };
+      const next = applyDocumentChange(state, { type: "upsert", row: documentRow({ version: 4, items: movedItems(1.5) }) });
+      expect(sofaX(next)).toBe(2.5);
+      expect(next.document).toBe(optimistic);
     });
 
     // Red if stale events overwrite newer state.
