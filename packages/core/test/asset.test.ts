@@ -224,6 +224,14 @@ describe("resolveAsset", () => {
     expect(resolveAsset(asset as never).parts[0]?.x).toBeCloseTo(Math.PI, 10);
   });
 
+  // Red if a failing field of a repeated part is reported once per repetition instead of once.
+  it("reports a failing field of a repeated part exactly once, with the base part id", () => {
+    const asset = buildAssetWith([buildBox({ x: "=1/0", repeat: { count: 3 } })]);
+    const { issues } = resolveAsset(asset as never);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ partId: "part_box", field: "x" });
+  });
+
   // Red if a failing position field is not 0, or no issue with partId and field is reported.
   it("turns a failing position field into 0 plus an issue with partId and field", () => {
     const asset = buildAssetWith([buildBox({ x: "=1/0" })]);

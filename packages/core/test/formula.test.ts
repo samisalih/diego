@@ -471,3 +471,33 @@ describe("robustness limits", () => {
     expect(resolveNumber(exact, {}).ok).toBe(true);
   });
 });
+
+describe("input hardening", () => {
+  // Red if non-finite literals are only rejected at the top level and not inside a call argument.
+  it("rejects a non-finite literal nested inside an expression", () => {
+    const result = evaluateFormula("if(1e999 > 0, 1, 2)", {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.message).toMatch(/finite/i);
+  });
+
+  // Red if the 500-character cap lives only in resolveNumber.
+  it("evaluateFormula rejects sources longer than 500 characters", () => {
+    const result = evaluateFormula("1" + "+0".repeat(250), {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.message).toMatch(/too long/i);
+  });
+
+  // Red if parseFormula does not enforce the cap itself.
+  it("parseFormula rejects sources longer than 500 characters", () => {
+    const result = parseFormula("1" + "+0".repeat(250));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.message).toMatch(/too long/i);
+  });
+
+  // Red if a deep left-leaning chain throws (e.g. stack overflow) instead of returning an error.
+  it("parseFormula returns an error for a 600-term chain and never throws", () => {
+    const source = Array(600).fill("1").join("+");
+    expect(() => parseFormula(source)).not.toThrow();
+    expect(parseFormula(source).ok).toBe(false);
+  });
+});
