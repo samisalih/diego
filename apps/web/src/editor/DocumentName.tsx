@@ -2,12 +2,9 @@ import { useRef, useState } from "react";
 import { useSceneStore } from "../data/store.ts";
 import { de } from "../i18n/de.ts";
 import { useEditorCommands } from "./EditorContext.tsx";
-import { Inspector } from "./Inspector.tsx";
-import { ToastHost } from "./ToastHost.tsx";
-import { Tree } from "./Tree.tsx";
 
-/** The document name; double-click renames it (commit on blur / Enter, Escape cancels). */
-function DocumentName() {
+/** The document name; double-click renames it (commit on blur / Enter, Escape cancels, blank names are dropped). */
+export function DocumentName() {
   const name = useSceneStore((state) => state.document?.name ?? "");
   const commands = useEditorCommands();
   const [isEditing, setIsEditing] = useState(false);
@@ -15,10 +12,14 @@ function DocumentName() {
 
   if (!isEditing) {
     return (
-      <h2 className="document-name" title={de.panel.renameDocument} onDoubleClick={() => {
+      <h2
+        className="document-name"
+        title={de.panel.renameDocument}
+        onDoubleClick={() => {
           isFinishing.current = false;
           setIsEditing(true);
-        }}>
+        }}
+      >
         {name}
       </h2>
     );
@@ -44,22 +45,5 @@ function DocumentName() {
       }}
       onBlur={(event) => finish(event.currentTarget.value)}
     />
-  );
-}
-
-export function SidePanel() {
-  return (
-    <aside className="side-panel" aria-label={de.panel.label}>
-      <header className="side-panel-header">
-        <DocumentName />
-      </header>
-      <div className="side-panel-tree">
-        <Tree />
-      </div>
-      <div className="side-panel-inspector">
-        <Inspector />
-      </div>
-      <ToastHost />
-    </aside>
   );
 }

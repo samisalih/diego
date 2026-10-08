@@ -1,14 +1,16 @@
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, PerformanceMonitor } from "@react-three/drei";
 import { useEffect, useMemo, useState } from "react";
 import { useSceneStore } from "../data/store.ts";
 import { installFrameStats, markFrameEvent } from "../dev/frameStats.ts";
+import type { PerspectiveCamera } from "three";
 import { useEditorStore } from "../editor/editorStore.ts";
 import { useEffectiveItems, useLayoutAnalysis } from "../editor/layoutAnalysis.ts";
 import { isToggleModifier } from "../editor/selectionModifiers.ts";
 import { outlineGroups } from "../editor/viewportFeedback.ts";
 import { ApartmentMeshes } from "./Apartment.tsx";
-import { apartmentBounds, type CameraSetup } from "./build/framing.ts";
+import { apartmentBounds, type Bounds, type CameraSetup } from "./build/framing.ts";
+import { fitCameraToFreeArea } from "./build/panelFraming.ts";
 import { initialCamera } from "./build/initialCamera.ts";
 import { lightingLevels, sunSetup } from "./build/sun.ts";
 import { DollhouseControls } from "./DollhouseControls.tsx";
@@ -103,12 +105,40 @@ function SceneContent({ cameraSetup }: { cameraSetup: CameraSetup }) {
   );
 }
 
+/**
+ * The canvas fills the window while the panels float over its edges. A view offset moves the image so the scene
+ * is centred in the free area between them (picking and the drag math follow, since they use the camera matrices).
+ */
+function PanelViewOffset() {
+  const camera = useThree((state) => state.camera);
+  const size = useThree((state) => state.size);
+  const insets = useEditorStore((state) => state.insets);
+
+  useEffect(() => {
+    const perspective = camera as PerspectiveCamera;
+    if (!perspective.isPerspectiveCamera) return;
+    perspective.setViewOffset(size.width, size.height, (insets.right - insets.left) / 2, -insets.top / 2, size.width, size.height);
+    return () => perspective.clearViewOffset();
+  }, [camera, size.width, size.height, insets]);
+
+  return null;
+}
+
+/** The stored or dollhouse camera; without a stored one the apartment is fitted to the area between the panels. */
+function initialCameraInFreeArea(appCamera: Parameters<typeof initialCamera>[0], bounds: Bounds): CameraSetup {
+  const setup = initialCamera(appCamera, bounds);
+  if (appCamera) return setup;
+  const { left, right, top } = useEditorStore.getState().insets;
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  return fitCameraToFreeArea(setup, bounds, viewport, { width: viewport.width - left - right, height: viewport.height - top });
+}
+
 /** The starting camera, computed once from the first document that is shown. */
 function useInitialCamera(): CameraSetup | null {
   const document = useSceneStore((state) => state.document);
   const appCamera = useSceneStore((state) => state.appState?.camera);
   // Deliberately computed once: later document updates must not yank the user's camera.
-  return useMemo(() => (document ? withDevCameraOverride(initialCamera(appCamera, apartmentBounds(document.apartment))) : null), []);
+  return useMemo(() => (document ? withDevCameraOverride(initialCameraInFreeArea(appCamera, apartmentBounds(document.apartment))) : null), []);
 }
 
 /** Mounts the performance monitor only after the warm-up, so start-up hitches never cost quality. */
@@ -164,6 +194,7 @@ export function Viewport() {
         gl.transmissionResolutionScale = TRANSMISSION_RESOLUTION_SCALE;
       }}
     >
+      <PanelViewOffset />
       <WarmedUpMonitor />
       {camera && <SceneContent cameraSetup={camera} />}
       <Effects />

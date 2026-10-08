@@ -15,20 +15,9 @@ body {
 .display i, .display em { font-style: italic; }
 .caps { font-family: var(--sans); font-weight: 800; font-stretch: 75%; text-transform: uppercase; letter-spacing: .12em; font-size: var(--fs-caps); }
 
-/* App shell: a flat top bar and the viewport below it; nothing is drawn on top of the canvas (design.md section A). */
-.app-shell { height: 100%; display: flex; flex-direction: column; }
-.top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 12px;
-  background: var(--ink2);
-  border-bottom: var(--hairline);
-}
-.top-bar-title { margin: 0; color: var(--text-muted); }
-.viewport { position: relative; flex: 1; min-height: 0; background: var(--ink); }
-.error-strip { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--ink3); border-bottom: var(--hairline); color: var(--red); font-weight: 600; }
+/* App shell: the viewport fills the whole window; the tool chrome floats above it as separate panels (design.md section A). */
+.app-shell { position: relative; height: 100%; overflow: hidden; }
+.viewport { position: absolute; inset: 0; background: var(--ink); }
 .viewport canvas { display: block; }
 .viewport-message { height: 100%; display: grid; place-content: center; text-align: center; gap: 8px; padding: 24px; }
 .viewport-message h2 { margin: 0; font-size: var(--fs-h3); }
@@ -93,4 +82,4 @@ body {
 .brand-mark { display: block; flex: none; object-fit: cover; }
 .brand-mark-small { border-radius: var(--radius-sm); }
 .brand-mark-large { border-radius: var(--radius); }
-.top-bar-brand { display: flex; align-items: center; gap: 8px; }
+

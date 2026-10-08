@@ -38,7 +38,7 @@ function useNowMs(busyUntil: string | null): number {
   return now;
 }
 
-function ClaudeBusyChip() {
+export function ClaudeBusyChip() {
   const busyUntil = useSceneStore((state) => state.appState?.aiBusyUntil ?? null);
   const now = useNowMs(busyUntil);
   if (busyUntil === null || Date.parse(busyUntil) <= now) return null;
@@ -80,8 +80,6 @@ export function Toolbar({ history }: { history: HistoryState }) {
       <div className="toolbar-group">
         <ToolButton label={de.toolbar.shortcuts} shortcutId="showShortcuts" disabled={false} onClick={() => setShortcutDialogOpen(true)}><HelpIcon /></ToolButton>
       </div>
-      <div className="toolbar-spacer" />
-      <ClaudeBusyChip />
     </div>
   );
 }

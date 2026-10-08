@@ -51,6 +51,10 @@ export const de = {
   panel: {
     label: "Seitenpanel",
     treeLabel: "Möbel und Räume",
+    openTree: "Möbel und Räume öffnen",
+    openInspector: "Eigenschaften öffnen",
+    collapse: "Panel einklappen",
+    accountMenu: "Konto",
     inspectorLabel: "Eigenschaften",
     furniture: "Möbel",
     rooms: "Räume",
@@ -64,6 +68,7 @@ export const de = {
     estimatedMarker: "Geschätzt",
   },
   inspector: {
+    summaryTitle: "Wohnung",
     summaryRooms: "Räume",
     summaryItems: "Möbel",
     summaryArea: "Wohnfläche",

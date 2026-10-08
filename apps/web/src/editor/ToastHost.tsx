@@ -3,7 +3,7 @@ import { useEditorStore } from "./editorStore.ts";
 
 const TOAST_DURATION_MS = 4500;
 
-/** A small toast at the bottom of the side panel; it hides itself. */
+/** A toast pill under the toolbar; it hides itself. */
 export function ToastHost() {
   const toast = useEditorStore((state) => state.toast);
   const dismissToast = useEditorStore((state) => state.dismissToast);

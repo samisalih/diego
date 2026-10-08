@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { insetsFor, type Insets } from "./layoutMetrics.ts";
 import { EMPTY_SELECTION, selectionReducer, type SelectionAction, type SelectionState } from "./selection.ts";
 
 /** Live positions of items while they are dragged; only the preview, nothing is written. */
@@ -11,6 +12,8 @@ type EditorState = {
   dragPreview: DragPreview | null;
   toast: Toast | null;
   isShortcutDialogOpen: boolean;
+  /** What the floating panels cover of the window, for the camera framing. */
+  insets: Insets;
 };
 
 type EditorActions = {
@@ -21,6 +24,7 @@ type EditorActions = {
   showToast: (message: string) => void;
   dismissToast: () => void;
   setShortcutDialogOpen: (isOpen: boolean) => void;
+  setInsets: (insets: Insets) => void;
 };
 
 let nextToastId = 1;
@@ -35,6 +39,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set) => ({
   dragPreview: null,
   toast: null,
   isShortcutDialogOpen: false,
+  insets: insetsFor({ isLeftOpen: true, isRightOpen: true }),
   dispatchSelection: (action) =>
     set((state) => {
       const next = selectionReducer(state.selection, action);
@@ -45,4 +50,5 @@ export const useEditorStore = create<EditorState & EditorActions>()((set) => ({
   showToast: (message) => set({ toast: { id: nextToastId++, message } }),
   dismissToast: () => set({ toast: null }),
   setShortcutDialogOpen: (isShortcutDialogOpen) => set({ isShortcutDialogOpen }),
+  setInsets: (insets) => set({ insets }),
 }));

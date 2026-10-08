@@ -1,10 +1,11 @@
 import { polygonArea, wallLength, type Asset, type Item, type LayoutIssue, type Opening, type Room, type Wall } from "@app/core";
 import type { MouseEvent } from "react";
+import { useEditorCommands } from "./EditorContext.tsx";
 import { useSceneStore } from "../data/store.ts";
 import { de } from "../i18n/de.ts";
 import { useEditorStore } from "./editorStore.ts";
 import { formatNumber } from "./format.ts";
-import { LockIcon, EyeOffIcon } from "./icons.tsx";
+import { ChevronIcon, CubeIcon, EyeIcon, EyeOffIcon, LockIcon, RoomIcon, UnlockIcon } from "./icons.tsx";
 import { useEffectiveItems, useLayoutAnalysis } from "./layoutAnalysis.ts";
 import { isToggleModifier } from "./selectionModifiers.ts";
 import { openingsOfWall, wallsOfRoom } from "./roomTree.ts";
@@ -21,13 +22,17 @@ function hasProblem(issues: LayoutIssue[] | undefined): boolean {
 
 function ItemRow({ item, label, isSelected, issues }: { item: Item; label: string; isSelected: boolean; issues: LayoutIssue[] | undefined }) {
   const dispatchSelection = useEditorStore((state) => state.dispatchSelection);
+  const commands = useEditorCommands();
   const handleClick = (event: MouseEvent): void => {
     dispatchSelection({ type: isToggleModifier(event) ? "toggle" : "select", id: item.id });
   };
   const hasClamped = (item.clampedParams?.length ?? 0) > 0;
+  const lockLabel = item.locked ? de.toolbar.unlock : de.toolbar.lock;
+  const hideLabel = item.hidden ? de.toolbar.show : de.toolbar.hide;
   return (
-    <li>
+    <li className="tree-item">
       <button type="button" className={`tree-row${isSelected ? " is-selected" : ""}${item.hidden ? " is-hidden" : ""}`} aria-pressed={isSelected} onClick={handleClick}>
+        <span className="tree-row-icon"><CubeIcon /></span>
         <span className="tree-row-label">{label}</span>
         <span className="tree-markers">
           {hasClamped && <span className="dot-mustard" role="img" aria-label={de.panel.clampedMarker} title={de.panel.clampedMarker} />}
@@ -36,6 +41,14 @@ function ItemRow({ item, label, isSelected, issues }: { item: Item; label: strin
           {item.hidden && <span className="tree-icon" role="img" aria-label={de.panel.hiddenMarker} title={de.panel.hiddenMarker}><EyeOffIcon /></span>}
         </span>
       </button>
+      <span className="tree-actions">
+        <button type="button" className="tree-action" aria-label={lockLabel} title={lockLabel} onClick={() => void commands.updateItem(item.id, { locked: !item.locked })}>
+          {item.locked ? <UnlockIcon /> : <LockIcon />}
+        </button>
+        <button type="button" className="tree-action" aria-label={hideLabel} title={hideLabel} onClick={() => void commands.updateItem(item.id, { hidden: !item.hidden })}>
+          {item.hidden ? <EyeIcon /> : <EyeOffIcon />}
+        </button>
+      </span>
     </li>
   );
 }
@@ -84,8 +97,10 @@ function RoomGroup({ room, walls, openings }: { room: Room; walls: Wall[]; openi
     <li>
       <details className="tree-details">
         <summary className={`tree-row${isFocused ? " is-selected" : ""}${room.estimated ? " is-estimated" : ""}`} onClick={() => dispatchSelection({ type: "focus", id: room.id })}>
+          <span className="tree-row-icon"><RoomIcon /></span>
           <span className="tree-row-label">{room.name}</span>
           <span className="tree-detail">{formatNumber(polygonArea(room.polygon))} {de.inspector.unitSquareMetres}</span>
+          <span className="tree-chevron"><ChevronIcon /></span>
         </summary>
         <ul className="tree-list tree-nested">
           {roomWalls.map((wall) => (
@@ -108,7 +123,7 @@ export function Tree() {
   const { rooms, walls, openings } = document.apartment;
   return (
     <nav className="tree" aria-label={de.panel.treeLabel}>
-      <h3 className="caps panel-title">{de.panel.furniture}</h3>
+      <h3 className="caps panel-title">{de.panel.furniture}<span className="panel-count">{items.length}</span></h3>
       {items.length === 0 ? (
         <p className="muted tree-empty">{de.panel.noFurniture}</p>
       ) : (
@@ -118,7 +133,7 @@ export function Tree() {
           ))}
         </ul>
       )}
-      <h3 className="caps panel-title">{de.panel.rooms}</h3>
+      <h3 className="caps panel-title">{de.panel.rooms}<span className="panel-count">{rooms.length}</span></h3>
       {rooms.length === 0 ? (
         <p className="muted tree-empty">{de.panel.noRooms}</p>
       ) : (

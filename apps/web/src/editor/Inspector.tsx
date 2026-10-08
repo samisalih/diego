@@ -102,11 +102,10 @@ function ItemInspector({ item, names }: { item: Item; names: Map<string, string>
   );
 }
 
-function BulkInspector({ count }: { count: number }) {
+function BulkInspector() {
   const commands = useEditorCommands();
   return (
     <div className="inspector-body">
-      <p className="inspector-count">{de.inspector.selectedCount(count)}</p>
       <div className="bulk-actions">
         <button className="button" type="button" onClick={() => void commands.duplicateSelected()}>{de.toolbar.duplicate}</button>
         <button className="button" type="button" onClick={() => void commands.removeSelected()}>{de.toolbar.delete}</button>
@@ -168,6 +167,19 @@ function DocumentSummary({ document }: { document: PlannerDocument }) {
 }
 
 /** The inspector below the tree: summary, one item with editable fields, a bulk selection, or read-only facts of a focus. */
+function focusTitle(document: PlannerDocument, focusId: string): string {
+  const { rooms, walls, openings } = document.apartment;
+  const opening = openings.find((entry) => entry.id === focusId);
+  if (opening) return de.openingTypes[opening.type];
+  if (walls.some((entry) => entry.id === focusId)) return de.layoutIssues.wall;
+  return rooms.find((entry) => entry.id === focusId)?.name ?? de.inspector.summaryTitle;
+}
+
+function InspectorTitle({ children }: { children: string }) {
+  return <h3 className="caps panel-title inspector-title">{children}</h3>;
+}
+
+/** The inspector: summary, one item with editable fields, a bulk selection, or read-only facts of a focus. */
 export function Inspector() {
   const document = useSceneStore((state) => state.document);
   const assets = useSceneStore((state) => state.assets);
@@ -176,10 +188,24 @@ export function Inspector() {
   if (!document) return null;
   const selectedItems = items.filter((item) => selection.selectedIds.includes(item.id));
   const [only] = selectedItems;
+  let title: string = de.inspector.summaryTitle;
   let content;
-  if (selectedItems.length > 1) content = <BulkInspector count={selectedItems.length} />;
-  else if (only) content = <ItemInspector item={only} names={namesById(document, items, assets)} />;
-  else if (selection.focusId !== null) content = <FocusInspector document={document} focusId={selection.focusId} />;
-  else content = <DocumentSummary document={document} />;
-  return <section className="inspector" aria-label={de.panel.inspectorLabel}>{content}</section>;
+  if (selectedItems.length > 1) {
+    title = de.inspector.selectedCount(selectedItems.length);
+    content = <BulkInspector />;
+  } else if (only) {
+    title = itemLabel(only, assets);
+    content = <ItemInspector item={only} names={namesById(document, items, assets)} />;
+  } else if (selection.focusId !== null) {
+    title = focusTitle(document, selection.focusId);
+    content = <FocusInspector document={document} focusId={selection.focusId} />;
+  } else {
+    content = <DocumentSummary document={document} />;
+  }
+  return (
+    <section className="inspector">
+      <InspectorTitle>{title}</InspectorTitle>
+      {content}
+    </section>
+  );
 }

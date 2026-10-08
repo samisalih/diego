@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type CSSProperties, type ReactNode } from "react";
 import { signOut } from "../auth/signIn.ts";
 import { createLocalOnlyDocumentWriterDeps, createSupabaseDocumentWriterDeps } from "../data/documentWriterDeps.ts";
 import { useSceneStore } from "../data/store.ts";
@@ -7,14 +7,16 @@ import { installEditorDevHooks } from "../dev/editorDevHooks.ts";
 import { setEditorCommands } from "../editor/commandsRegistry.ts";
 import { createEditorCommands } from "../editor/commands.ts";
 import { EditorCommandsContext } from "../editor/EditorContext.tsx";
+import { LeftPanel, RightPanel } from "../editor/FloatingPanels.tsx";
+import { COLLAPSED_BUTTON_PX, LEFT_PANEL_WIDTH_PX, PANEL_GAP_PX, RIGHT_PANEL_WIDTH_PX } from "../editor/layoutMetrics.ts";
 import { ShortcutDialog } from "../editor/ShortcutDialog.tsx";
-import { SidePanel } from "../editor/SidePanel.tsx";
-import { Toolbar } from "../editor/Toolbar.tsx";
+import { ClaudeBusyChip, Toolbar } from "../editor/Toolbar.tsx";
+import { ToastHost } from "../editor/ToastHost.tsx";
 import { useHistoryState } from "../editor/useHistoryState.ts";
+import { usePanelLayout } from "../editor/usePanelLayout.ts";
 import { usePruneSelection, useSelectionSync } from "../editor/useSelectionSync.ts";
 import { useShortcuts } from "../editor/useShortcuts.ts";
 import { de } from "../i18n/de.ts";
-import { BrandMark } from "./BrandMark.tsx";
 import { Viewport } from "../scene/Viewport.tsx";
 
 function ViewportMessage({ title, hint, children }: { title: string; hint?: string; children?: ReactNode }) {
@@ -43,14 +45,14 @@ function SceneOrMessage({ onRetry }: { onRetry?: () => void }) {
   return <ViewportMessage title={de.app.loading} />;
 }
 
-/** Load error above the viewport (never over the canvas) while a cached scene is still shown. */
-function ErrorStrip({ onRetry }: { onRetry?: () => void }) {
+/** Load error as a red-edged block in the left panel while a cached scene is still shown. */
+function ErrorBlock({ onRetry }: { onRetry?: () => void }) {
   const hasDocument = useSceneStore((state) => state.document !== null);
   const status = useSceneStore((state) => state.status);
   const error = useSceneStore((state) => state.error);
   if (!hasDocument || status !== "error") return null;
   return (
-    <div className="error-strip" role="alert">
+    <div className="panel-notice" role="alert">
       <span>{error ?? de.data.loadFailed}</span>
       {onRetry && <button className="button" type="button" onClick={onRetry}>{de.data.retry}</button>}
     </div>
@@ -86,23 +88,26 @@ export function Editor({ canSignOut, onRetry, isFixture = false }: { canSignOut:
   usePruneSelection();
   useDevHooks(isFixture);
 
+  const layout = usePanelLayout();
+  const shellStyle = {
+    "--panel-gap": `${PANEL_GAP_PX}px`,
+    "--panel-left-width": `${LEFT_PANEL_WIDTH_PX}px`,
+    "--panel-right-width": `${RIGHT_PANEL_WIDTH_PX}px`,
+    "--collapsed-button-size": `${COLLAPSED_BUTTON_PX}px`,
+  } as CSSProperties;
+
   return (
     <EditorCommandsContext value={commands}>
-      <div className="app-shell">
-        <header className="top-bar">
-          <div className="top-bar-brand">
-            <BrandMark size="small" />
-            <p className="caps top-bar-title">{de.app.title}</p>
-          </div>
-          {canSignOut && <button className="button" type="button" onClick={() => void signOut()}>{de.auth.signOut}</button>}
-        </header>
-        <Toolbar history={history} />
-        <ErrorStrip onRetry={onRetry} />
-        <div className="editor-main">
-          <div className="viewport">
-            <SceneOrMessage onRetry={onRetry} />
-          </div>
-          <SidePanel />
+      <div className="app-shell" style={shellStyle}>
+        <div className="viewport">
+          <SceneOrMessage onRetry={onRetry} />
+        </div>
+        <LeftPanel layout={layout} canSignOut={canSignOut} notice={<ErrorBlock onRetry={onRetry} />} />
+        <RightPanel layout={layout} />
+        <div className="top-stack">
+          <Toolbar history={history} />
+          <ClaudeBusyChip />
+          <ToastHost />
         </div>
         <ShortcutDialog />
       </div>
