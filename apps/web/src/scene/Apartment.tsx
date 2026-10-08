@@ -18,8 +18,8 @@ function lookup(materials: MaterialsById, id: string | null | undefined): Materi
   return id ? materials.get(id) : undefined;
 }
 
-function WallMesh({ wall, openings, ceilingHeight, material }: { wall: Wall; openings: Opening[]; ceilingHeight: number; material: Material | undefined }) {
-  const geometry = useDisposed(useMemo(() => buildWallGeometry(wall, openings, ceilingHeight), [wall, openings, ceilingHeight]));
+function WallMesh({ wall, walls, openings, ceilingHeight, material }: { wall: Wall; walls: Wall[]; openings: Opening[]; ceilingHeight: number; material: Material | undefined }) {
+  const geometry = useDisposed(useMemo(() => buildWallGeometry(wall, walls, openings, ceilingHeight), [wall, walls, openings, ceilingHeight]));
   return (
     <mesh geometry={geometry} castShadow receiveShadow>
       <SurfaceMaterial material={material} />
@@ -76,6 +76,7 @@ export function ApartmentMeshes({ apartment, materials }: { apartment: Apartment
         <WallMesh
           key={wall.id}
           wall={wall}
+          walls={walls}
           openings={openingsByWallId.get(wall.id) ?? NO_OPENINGS}
           ceilingHeight={meta.ceilingHeight}
           material={lookup(materials, findWallMaterialId(wall, rooms))}

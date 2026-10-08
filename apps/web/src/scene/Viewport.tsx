@@ -15,6 +15,7 @@ import { QUALITY_LEVELS, useQualityLevel, useQualityStore } from "./quality.ts";
 import { NeutralEnvironment, SkyBackground } from "./SkyEnvironment.tsx";
 import { SunLight } from "./SunLight.tsx";
 import { useDeepStable } from "./useDeepStable.ts";
+import { withDevCameraOverride } from "../dev/cameraOverride.ts";
 import { withDevLightingOverride } from "../dev/lightingOverride.ts";
 
 const CAMERA_NEAR = 0.1;
@@ -91,7 +92,7 @@ function useInitialCamera(): CameraSetup | null {
   const document = useSceneStore((state) => state.document);
   const appCamera = useSceneStore((state) => state.appState?.camera);
   // Deliberately computed once: later document updates must not yank the user's camera.
-  return useMemo(() => (document ? initialCamera(appCamera, apartmentBounds(document.apartment)) : null), []);
+  return useMemo(() => (document ? withDevCameraOverride(initialCamera(appCamera, apartmentBounds(document.apartment))) : null), []);
 }
 
 /** Mounts the performance monitor only after the warm-up, so start-up hitches never cost quality. */

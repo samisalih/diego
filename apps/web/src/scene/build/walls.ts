@@ -1,5 +1,6 @@
 import { wallLength, type Opening, type Wall } from "@app/core";
 import { wallDirection } from "./wallDirection.ts";
+import { wallEndExtensions } from "./wallJoints.ts";
 import { BufferGeometry, Float32BufferAttribute } from "three";
 
 /** Wall-local coordinates: u along the centre line, v up, w across the thickness. u x v = w. */
@@ -111,8 +112,8 @@ function subtractIntervals(start: number, end: number, covered: Interval[]): Int
 }
 
 /** Splits the wall face into rectangles: one vertical strip between neighbouring hole edges, minus the holes. */
-function faceRectangles(length: number, height: number, holes: Hole[]): Hole[] {
-  const breakpoints = [...new Set([0, length, ...holes.flatMap((hole) => [hole.u0, hole.u1])])].sort((a, b) => a - b);
+function faceRectangles(span: Interval, height: number, holes: Hole[]): Hole[] {
+  const breakpoints = [...new Set([span[0], span[1], ...holes.flatMap((hole) => [hole.u0, hole.u1])])].sort((a, b) => a - b);
   const rectangles: Hole[] = [];
   for (let i = 0; i + 1 < breakpoints.length; i += 1) {
     const u0 = breakpoints[i]!;
@@ -132,14 +133,14 @@ function addFaces(mesh: WallMesh, rectangles: Hole[], halfThickness: number): vo
   }
 }
 
-function addCaps(mesh: WallMesh, length: number, height: number, thickness: number, holes: Hole[]): void {
+function addCaps(mesh: WallMesh, span: Interval, height: number, thickness: number, holes: Hole[]): void {
   const halfThickness = thickness / 2;
   const bottomGaps = mergeIntervals(holes.filter((hole) => hole.v0 <= 0).map((hole): Interval => [hole.u0, hole.u1]));
   const topGaps = mergeIntervals(holes.filter((hole) => hole.v1 >= height).map((hole): Interval => [hole.u0, hole.u1]));
-  for (const [u0, u1] of subtractIntervals(0, length, bottomGaps)) mesh.addQuad([u0, 0, -halfThickness], alongU(u1 - u0), alongW(thickness));
-  for (const [u0, u1] of subtractIntervals(0, length, topGaps)) mesh.addQuad([u0, height, -halfThickness], alongW(thickness), alongU(u1 - u0));
-  mesh.addQuad([0, 0, -halfThickness], alongW(thickness), alongV(height));
-  mesh.addQuad([length, 0, -halfThickness], alongV(height), alongW(thickness));
+  for (const [u0, u1] of subtractIntervals(span[0], span[1], bottomGaps)) mesh.addQuad([u0, 0, -halfThickness], alongU(u1 - u0), alongW(thickness));
+  for (const [u0, u1] of subtractIntervals(span[0], span[1], topGaps)) mesh.addQuad([u0, height, -halfThickness], alongW(thickness), alongU(u1 - u0));
+  mesh.addQuad([span[0], 0, -halfThickness], alongW(thickness), alongV(height));
+  mesh.addQuad([span[1], 0, -halfThickness], alongV(height), alongW(thickness));
 }
 
 function addReveals(mesh: WallMesh, hole: Hole, height: number, thickness: number): void {
@@ -153,18 +154,22 @@ function addReveals(mesh: WallMesh, hole: Hole, height: number, thickness: numbe
 
 /**
  * Wall box along the centre line with a rectangular hole (including reveals) for every opening of the
- * wall. UVs are in metres, normals point outwards, one index, no groups.
+ * wall. Ends that join another wall of `walls` are extended by half the wall's thickness; opening
+ * offsets stay relative to the original start. UVs are in metres, normals point outwards, one index,
+ * no groups.
  */
-export function buildWallGeometry(wall: Wall, openings: Opening[], ceilingHeight: number): BufferGeometry {
+export function buildWallGeometry(wall: Wall, walls: Wall[], openings: Opening[], ceilingHeight: number): BufferGeometry {
   const length = wallLength(wall);
   const holes = openings
     .filter((opening) => opening.wallId === wall.id)
     .map((opening) => toHole(opening, length, ceilingHeight))
     .filter((hole) => hole !== null);
 
+  const extensions = wallEndExtensions(wall, walls);
+  const span: Interval = [-extensions.start, length + extensions.end];
   const mesh = new WallMesh(wall);
-  addFaces(mesh, faceRectangles(length, ceilingHeight, holes), wall.thickness / 2);
-  addCaps(mesh, length, ceilingHeight, wall.thickness, holes);
+  addFaces(mesh, faceRectangles(span, ceilingHeight, holes), wall.thickness / 2);
+  addCaps(mesh, span, ceilingHeight, wall.thickness, holes);
   for (const hole of holes) addReveals(mesh, hole, ceilingHeight, wall.thickness);
   return mesh.toGeometry();
 }
