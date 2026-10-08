@@ -101,6 +101,51 @@ describe("mergeLoadResult", () => {
     expect(loaded.document).toEqual(snapshot.document);
     expect([...loaded.assets]).toEqual(snapshot.assets);
   });
+
+  describe("invalid buffered rows", () => {
+    const brokenDocumentApartment = () => {
+      const apartment = structuredClone(SEED_DOCUMENT.apartment);
+      apartment.meta.ceilingHeight = 99;
+      return apartment;
+    };
+
+    // Red if one broken buffered row throws (the whole load would fail) or aborts the replay.
+    it("skips an asset row with broken params and still applies the changes around it", () => {
+      const buffered: TableChange[] = [
+        { table: "documents", change: { type: "upsert", row: documentRow({ version: 4, items: movedItems(4) }) } },
+        { table: "assets", change: { type: "upsert", row: assetRow(SOFA_ASSET, { name: "Broken", params: "not-an-array" }) } },
+        { table: "materials", change: { type: "upsert", row: materialRow(OAK_FLOOR, { fallback_color: "#112233" }) } },
+        { table: "documents", change: { type: "upsert", row: documentRow({ version: 5, items: movedItems(5) }) } },
+      ];
+      let result: ReturnType<typeof mergeLoadResult> | undefined;
+      expect(() => { result = mergeLoadResult(loadedState(3), buffered); }).not.toThrow();
+      expect(result!.state.assets.get("asset_sofa")?.name).toBe(SOFA_ASSET.name);
+      expect(result!.state.materials.get("mat_oak_floorboards")?.fallbackColor).toBe("#112233");
+      expect(sofaX(result!.state)).toBe(5);
+      expect(result!.state.document?.version).toBe(5);
+    });
+
+    // Red if an invalid document row throws or replaces the loaded document; later valid rows must win.
+    it("skips a document row with invalid content and applies a later valid upsert", () => {
+      const buffered: TableChange[] = [
+        { table: "documents", change: { type: "upsert", row: documentRow({ version: 4, apartment: brokenDocumentApartment() }) } },
+        { table: "documents", change: { type: "upsert", row: documentRow({ version: 5, items: movedItems(7) }) } },
+      ];
+      let result: ReturnType<typeof mergeLoadResult> | undefined;
+      expect(() => { result = mergeLoadResult(loadedState(3), buffered); }).not.toThrow();
+      expect(sofaX(result!.state)).toBe(7);
+      expect(result!.state.document?.version).toBe(5);
+    });
+
+    // Red if the invalid row is applied or clears the loaded document when it is the only buffered change.
+    it("keeps the loaded document when the only buffered document row is invalid", () => {
+      const buffered: TableChange[] = [{ table: "documents", change: { type: "upsert", row: documentRow({ version: 4, apartment: brokenDocumentApartment() }) } }];
+      const result = mergeLoadResult(loadedState(3), buffered);
+      expect(result.state.document?.version).toBe(3);
+      expect(sofaX(result.state)).toBe(SEED_SOFA_X);
+      expect(result.needsDocumentReload).toBe(false);
+    });
+  });
 });
 
 describe("acceptReloadedDocument", () => {
@@ -109,7 +154,7 @@ describe("acceptReloadedDocument", () => {
   // Red if the document loaded after a switch is not applied when nothing is in the state yet.
   it("applies a loaded document that matches the active document id", () => {
     const state = { ...loadedState(), document: null };
-    const next = acceptReloadedDocument(state, reloaded(1));
+    const next = acceptReloadedDocument(state, SEED_DOCUMENT.id, reloaded(1));
     expect(next.document?.id).toBe(SEED_DOCUMENT.id);
     expect(sofaX(next)).toBe(6);
   });
@@ -117,34 +162,66 @@ describe("acceptReloadedDocument", () => {
   // Red if a document for a no-longer-active id (the user switched again meanwhile) is applied.
   it("returns the state unchanged when the id is not the active document", () => {
     const state = { ...loadedState(), document: null };
-    expect(acceptReloadedDocument(state, reloaded(1, "doc_other"))).toBe(state);
+    expect(acceptReloadedDocument(state, "doc_other", reloaded(1, "doc_other"))).toBe(state);
   });
 
   // Red if there is no active document at all but a document is accepted.
   it("returns the state unchanged when no document is active", () => {
     const state = { ...loadedState(), appState: appStateFromRow(appStateRow({ active_document_id: null })), document: null };
-    expect(acceptReloadedDocument(state, reloaded(1))).toBe(state);
+    expect(acceptReloadedDocument(state, SEED_DOCUMENT.id, reloaded(1))).toBe(state);
   });
 
   // Red if a reload overwrites a newer version of the same document that a Realtime event delivered meanwhile.
   it("returns the state unchanged when the loaded document is older than the same document in the state", () => {
     const state = loadedState(5);
-    expect(acceptReloadedDocument(state, reloaded(4))).toBe(state);
+    expect(acceptReloadedDocument(state, SEED_DOCUMENT.id, reloaded(4))).toBe(state);
   });
 
   // Red if equal or newer versions of the same document are rejected.
   it("accepts the same or a newer version of the same document", () => {
-    expect(sofaX(acceptReloadedDocument(loadedState(5), reloaded(5)))).toBe(6);
-    expect(acceptReloadedDocument(loadedState(5), reloaded(6)).document?.version).toBe(6);
+    expect(sofaX(acceptReloadedDocument(loadedState(5), SEED_DOCUMENT.id, reloaded(5)))).toBe(6);
+    expect(acceptReloadedDocument(loadedState(5), SEED_DOCUMENT.id, reloaded(6)).document?.version).toBe(6);
   });
 
   // Red if the version comparison also applies across ids (a switch to a document with a lower version would stick on the old one).
   it("replaces a document with a different id regardless of the version", () => {
     const other = documentFromRow(documentRow({ id: "doc_other", version: 9 }))!;
     const state = { ...loadedState(), appState: appStateFromRow(appStateRow({ active_document_id: SEED_DOCUMENT.id })), document: other };
-    const next = acceptReloadedDocument(state, reloaded(1));
+    const next = acceptReloadedDocument(state, SEED_DOCUMENT.id, reloaded(1));
     expect(next.document?.id).toBe(SEED_DOCUMENT.id);
     expect(next.document?.version).toBe(1);
+  });
+  describe("with the requested id", () => {
+    // Red if a load result for the active id that found no document (null) leaves the old document in place.
+    it("clears the document when the load for the active id returned null", () => {
+      const state = loadedState(3);
+      const next = acceptReloadedDocument(state, SEED_DOCUMENT.id, null);
+      expect(next.document).toBeNull();
+    });
+
+    // Red if a stale null (the active id moved on while loading) clears the current document.
+    it("returns the state unchanged for a null result of a stale requested id", () => {
+      const state = loadedState(3);
+      expect(acceptReloadedDocument(state, "doc_stale", null)).toBe(state);
+    });
+
+    // Red if a stale non-null result is applied: the id matches neither the requested nor the active one.
+    it("returns the state unchanged for a loaded document of a stale requested id", () => {
+      const state = loadedState(3);
+      expect(acceptReloadedDocument(state, "doc_stale", reloaded(9, "doc_stale"))).toBe(state);
+    });
+
+    // Red if the stale check compares the loaded id only and ignores the requested id.
+    it("returns the state unchanged when the requested id is stale even if the loaded id is active", () => {
+      const state = loadedState(3);
+      expect(acceptReloadedDocument(state, "doc_stale", reloaded(9))).toBe(state);
+    });
+
+    // Red if a null result with no active document clears anything or throws.
+    it("returns the state unchanged for null when no document is active and the id is stale", () => {
+      const state = { ...loadedState(), appState: appStateFromRow(appStateRow({ active_document_id: null })), document: null };
+      expect(acceptReloadedDocument(state, SEED_DOCUMENT.id, null)).toBe(state);
+    });
   });
 });
 
