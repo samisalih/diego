@@ -27,16 +27,23 @@ export function usePruneSelection(): void {
   }, []);
 }
 
+const MAX_REMEMBERED_ECHOES = 8;
+
+function keyOf(selection: SelectionState): string {
+  return JSON.stringify([selection.selectedIds, selection.focusId]);
+}
+
 /**
  * Mirrors the local selection to `app_state` (debounced, no revision) and takes over selection changes
- * that arrive from outside (Claude). Writes are skipped when the row already holds the selection, which
- * also stops an incoming change from being written straight back.
+ * that arrive from outside (Claude). Every written selection is remembered until its echo arrives, so echoes
+ * are ignored even when newer writes are already on their way; any other incoming selection is a foreign
+ * change, wins over a write that is still waiting in the debounce, and cancels it.
  */
 export function useSelectionSync(client: SupabaseClient | null): void {
   useEffect(() => {
     if (!client) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let isWriting = false;
+    const awaitedEchoes: string[] = [];
 
     const initial = selectionOfAppState();
     if (initial) useEditorStore.getState().replaceSelection(initial);
@@ -46,9 +53,9 @@ export function useSelectionSync(client: SupabaseClient | null): void {
       const local = useEditorStore.getState().selection;
       const remote = selectionOfAppState();
       if (remote && isSameSelection(local, remote)) return;
-      isWriting = true;
+      awaitedEchoes.push(keyOf(local));
+      if (awaitedEchoes.length > MAX_REMEMBERED_ECHOES) awaitedEchoes.shift();
       const { error } = await client.from("app_state").update({ selection: local.selectedIds, focus_id: local.focusId }).eq("id", APP_STATE_ROW_ID);
-      isWriting = false;
       if (error) console.error("Writing the selection failed", error);
     };
 
@@ -60,10 +67,19 @@ export function useSelectionSync(client: SupabaseClient | null): void {
 
     const stopRemote = useSceneStore.subscribe((state, previous) => {
       if (state.appState === previous.appState || !state.appState) return;
-      // Echoes of our own write arrive while a write is pending or in flight; only foreign changes are applied.
-      if (timer !== undefined || isWriting) return;
       const incoming = selectionOfAppState();
-      if (incoming && !isSameSelection(incoming, useEditorStore.getState().selection)) useEditorStore.getState().replaceSelection(incoming);
+      if (!incoming) return;
+      // Other app_state fields (e.g. ai_busy_until) change independently of the selection.
+      if (keyOf(incoming) === keyOf({ selectedIds: previous.appState?.selection ?? [], focusId: previous.appState?.focusId ?? null })) return;
+      const echoIndex = awaitedEchoes.indexOf(keyOf(incoming));
+      if (echoIndex >= 0) {
+        awaitedEchoes.splice(0, echoIndex + 1);
+        return;
+      }
+      if (isSameSelection(incoming, useEditorStore.getState().selection)) return;
+      clearTimeout(timer);
+      timer = undefined;
+      useEditorStore.getState().replaceSelection(incoming);
     });
 
     return () => {

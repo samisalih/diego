@@ -1,4 +1,4 @@
-import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { CommitResult } from "../data/documentWriter.ts";
 import { de } from "../i18n/de.ts";
 
@@ -10,38 +10,94 @@ function roundForDisplay(value: number): string {
   return String(Number(value.toFixed(NUMBER_DISPLAY_DECIMALS)));
 }
 
-function blurOnEnter(event: KeyboardEvent<HTMLInputElement>): void {
-  if (event.key === "Enter") event.currentTarget.blur();
-}
-
-/** Commits the typed value on blur / Enter; Escape or a rejected commit puts the old value back. */
+/** Commits the typed text on blur / Enter; Escape or a rejected commit puts the old text back. */
 export function TextField({ label, value, placeholder, disabled, onCommit }: { label: string; value: string; placeholder?: string; disabled?: boolean; onCommit: Commit<string> }) {
   const id = useId();
+  const input = useRef<HTMLInputElement>(null);
+  const valueNow = useRef(value);
+  valueNow.current = value;
+
+  useEffect(() => {
+    if (input.current && document.activeElement !== input.current) input.current.value = value;
+  }, [value]);
+
+  const restore = (): void => {
+    if (input.current) input.current.value = valueNow.current;
+  };
+
   return (
     <div className="field-row">
       <label className="field-label" htmlFor={id}>{label}</label>
       <input
+        ref={input}
         id={id}
-        key={value}
         className="input"
         type="text"
         defaultValue={value}
         placeholder={placeholder}
         disabled={disabled}
         onKeyDown={(event) => {
-          if (event.key === "Escape") event.currentTarget.value = value;
-          blurOnEnter(event);
-          if (event.key === "Escape") event.currentTarget.blur();
+          if (event.key === "Escape") restore();
+          if (event.key === "Enter" || event.key === "Escape") event.currentTarget.blur();
         }}
         onBlur={(event) => {
-          const input = event.currentTarget;
-          if (input.value === value) return;
-          void onCommit(input.value).then((result) => {
-            if (!result.ok) input.value = value;
+          if (event.currentTarget.value === valueNow.current) return;
+          void onCommit(event.currentTarget.value).then((result) => {
+            if (!result.ok) restore();
           });
         }}
       />
     </div>
+  );
+}
+
+type CommitNumberInputProps = { id?: string; ariaLabel?: string; value: number; step: number; disabled?: boolean; onCommit: Commit<number> };
+
+/**
+ * A number input that commits on blur / Enter only when the user changed what is shown: focusing and leaving
+ * a field never writes, and a value with more decimals than displayed is not rounded silently. An external
+ * value change updates the field in place (no remount) unless the user is typing in it.
+ */
+function CommitNumberInput({ id, ariaLabel, value, step, disabled, onCommit }: CommitNumberInputProps) {
+  const input = useRef<HTMLInputElement>(null);
+  const shown = roundForDisplay(value);
+  const shownNow = useRef(shown);
+  shownNow.current = shown;
+
+  useEffect(() => {
+    if (input.current && document.activeElement !== input.current) input.current.value = shown;
+  }, [shown]);
+
+  const restore = (): void => {
+    if (input.current) input.current.value = shownNow.current;
+  };
+
+  return (
+    <input
+      ref={input}
+      id={id}
+      aria-label={ariaLabel}
+      className="input"
+      type="number"
+      step={step}
+      defaultValue={shown}
+      disabled={disabled}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") restore();
+        if (event.key === "Enter" || event.key === "Escape") event.currentTarget.blur();
+      }}
+      onBlur={(event) => {
+        if (event.currentTarget.value === shownNow.current) return;
+        const typed = event.currentTarget.valueAsNumber;
+        if (Number.isNaN(typed) || typed === value) {
+          restore();
+          return;
+        }
+        void onCommit(typed).then((result) => {
+          if (!result.ok) restore();
+        });
+      }}
+    />
   );
 }
 
@@ -51,31 +107,7 @@ export function NumberField({ label, value, step, unit, disabled, onCommit }: { 
     <div className="field-row">
       <label className="field-label" htmlFor={id}>{label}</label>
       <span className="field-input-with-unit">
-        <input
-          id={id}
-          key={value}
-          className="input"
-          type="number"
-          step={step}
-          defaultValue={roundForDisplay(value)}
-          disabled={disabled}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") event.currentTarget.value = roundForDisplay(value);
-            blurOnEnter(event);
-            if (event.key === "Escape") event.currentTarget.blur();
-          }}
-          onBlur={(event) => {
-            const input = event.currentTarget;
-            const typed = input.valueAsNumber;
-            if (Number.isNaN(typed) || typed === value) {
-              input.value = roundForDisplay(value);
-              return;
-            }
-            void onCommit(typed).then((result) => {
-              if (!result.ok) input.value = roundForDisplay(value);
-            });
-          }}
-        />
+        <CommitNumberInput id={id} value={value} step={step} disabled={disabled} onCommit={onCommit} />
         <span className="field-unit">{unit}</span>
       </span>
     </div>
@@ -84,20 +116,24 @@ export function NumberField({ label, value, step, unit, disabled, onCommit }: { 
 
 type SliderFieldProps = { label: string; value: number; min: number; max: number; step: number; unit: string; isAdjusted: boolean; onCommit: Commit<number> };
 
-/** A slider with a number field; nothing is written while dragging, one commit on release (or Enter / blur in the number). */
+/** A slider with a number field; nothing is written while dragging, one commit on release (also outside the slider), Enter or blur. */
 export function SliderField({ label, value, min, max, step, unit, isAdjusted, onCommit }: SliderFieldProps) {
   const id = useId();
   const [draft, setDraft] = useState<number | null>(null);
+  const isCommitting = useRef(false);
   const shown = draft ?? value;
 
   const commitDraft = (): void => {
-    if (draft === null) return;
-    const next = draft;
-    if (next === value) {
+    if (draft === null || isCommitting.current) return;
+    if (draft === value) {
       setDraft(null);
       return;
     }
-    void onCommit(next).finally(() => setDraft(null));
+    isCommitting.current = true;
+    void onCommit(draft).finally(() => {
+      isCommitting.current = false;
+      setDraft(null);
+    });
   };
 
   return (
@@ -115,31 +151,15 @@ export function SliderField({ label, value, min, max, step, unit, isAdjusted, on
         step={step}
         value={shown}
         onChange={(event) => setDraft(event.currentTarget.valueAsNumber)}
+        // Capturing the pointer delivers the release to the slider even when it happens outside of it.
+        onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
         onPointerUp={commitDraft}
+        onLostPointerCapture={commitDraft}
         onKeyUp={commitDraft}
         onBlur={commitDraft}
       />
       <span className="field-input-with-unit">
-        <input
-          className="input"
-          type="number"
-          step={step}
-          aria-label={label}
-          key={value}
-          defaultValue={roundForDisplay(value)}
-          onKeyDown={blurOnEnter}
-          onBlur={(event) => {
-            const input = event.currentTarget;
-            const typed = input.valueAsNumber;
-            if (Number.isNaN(typed) || typed === value) {
-              input.value = roundForDisplay(value);
-              return;
-            }
-            void onCommit(typed).then((result) => {
-              if (!result.ok) input.value = roundForDisplay(value);
-            });
-          }}
-        />
+        <CommitNumberInput ariaLabel={label} value={value} step={step} onCommit={onCommit} />
         <span className="field-unit">{unit}</span>
       </span>
     </div>

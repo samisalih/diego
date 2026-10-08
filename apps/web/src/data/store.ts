@@ -35,14 +35,14 @@ function upsertOrRemove<T>(map: Map<string, T>, id: string, value: T | null): Ma
 /** The state type after a document change: the document may be set or cleared whatever it was before. */
 export type WithDocument<S extends SceneData> = Omit<S, "document"> & Pick<SceneData, "document">;
 
-/** Applies a `documents` change; only the active document is kept and stale versions are ignored. */
+/** Applies a `documents` change; only the active document is kept, and only a strictly newer version (the echo of a local save carries the version already applied). */
 export function applyDocumentChange<S extends SceneData>(state: S, change: RowChange): WithDocument<S> {
   const id = change.row.id as string;
   if (id !== state.appState?.activeDocumentId) return state;
   if (change.type === "delete") return { ...state, document: null };
   const incoming = documentFromRow(change.row);
   if (incoming === null) return { ...state, document: null };
-  if (state.document?.id === incoming.id && incoming.version < state.document.version) return state;
+  if (state.document?.id === incoming.id && incoming.version <= state.document.version) return state;
   return { ...state, document: incoming };
 }
 

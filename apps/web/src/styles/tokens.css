@@ -22,6 +22,9 @@
   --chrome: linear-gradient(180deg, #fff 0%, #d9d4e6 38%, #6d6880 50%, #f0e9ff 58%, #9a93ad 80%, #fff 100%);
   --shadow: 0 18px 50px rgba(0, 0, 0, .6);
 
+  /* Editor surfaces */
+  --scrim: rgba(11, 10, 13, .72); --chip-surface: rgba(23, 21, 27, .9); --chip-edge: rgba(239, 230, 214, .35); --glow-blue-soft: rgba(63, 109, 255, .25);
+
   /* Geometry */
   --radius: 22px; --radius-sm: 12px; --radius-pill: 999px;
   --hairline: 1.5px solid rgba(239, 230, 214, .18);

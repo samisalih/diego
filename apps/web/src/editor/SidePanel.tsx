@@ -28,7 +28,8 @@ function DocumentName() {
     if (isFinishing.current) return;
     isFinishing.current = true;
     setIsEditing(false);
-    if (nextName !== null && nextName !== name) void commands.renameDocument(nextName);
+    const trimmed = nextName?.trim() ?? null;
+    if (trimmed !== null && trimmed !== "" && trimmed !== name) void commands.renameDocument(trimmed);
   };
   return (
     <input

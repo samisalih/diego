@@ -5,6 +5,7 @@ import { useSceneStore } from "../data/store.ts";
 import { installFrameStats, markFrameEvent } from "../dev/frameStats.ts";
 import { useEditorStore } from "../editor/editorStore.ts";
 import { useEffectiveItems, useLayoutAnalysis } from "../editor/layoutAnalysis.ts";
+import { isToggleModifier } from "../editor/selectionModifiers.ts";
 import { outlineGroups } from "../editor/viewportFeedback.ts";
 import { ApartmentMeshes } from "./Apartment.tsx";
 import { apartmentBounds, type CameraSetup } from "./build/framing.ts";
@@ -130,7 +131,7 @@ function WarmedUpMonitor() {
 }
 
 function clearSelectionOnEmptyClick(event: MouseEvent): void {
-  if (event.shiftKey || event.metaKey || event.ctrlKey) return;
+  if (isToggleModifier(event)) return;
   useEditorStore.getState().dispatchSelection({ type: "clear" });
 }
 

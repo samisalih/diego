@@ -17,6 +17,9 @@ export type EditorCommands = {
   redo: () => Promise<void>;
 };
 
+/** The result of a field edit that was refused before any write, e.g. a blank name. */
+export const REFUSED_EDIT: CommitResult = { ok: false, reason: "invalid", issues: [] };
+
 const LOCKED_ISSUE_PATTERN = /\blocked\b/i;
 
 const FAILURE_MESSAGES: Record<Failure["reason"], string> = {
@@ -93,8 +96,9 @@ export function createEditorCommands(deps: DocumentWriterDeps, options: { isHist
       const idsBefore = itemIdsOf();
       const result = await commit((content) => duplicateItems(content, ids));
       if (!result.ok) return;
-      const copyIds = (useSceneStore.getState().document?.items ?? []).map((item) => item.id).filter((id) => !idsBefore.has(id));
-      replaceSelection({ selectedIds: copyIds, focusId: null });
+      // duplicateItems appends the copies in the order of the given ids; anything else added meanwhile is not ours.
+      const added = (useSceneStore.getState().document?.items ?? []).map((item) => item.id).filter((id) => !idsBefore.has(id));
+      replaceSelection({ selectedIds: added.slice(-ids.length), focusId: null });
     },
     removeSelected: async () => {
       const ids = selectedItemIds();

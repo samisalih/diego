@@ -6,6 +6,7 @@ import { useEditorStore } from "./editorStore.ts";
 import { formatNumber } from "./format.ts";
 import { LockIcon, EyeOffIcon } from "./icons.tsx";
 import { useEffectiveItems, useLayoutAnalysis } from "./layoutAnalysis.ts";
+import { isToggleModifier } from "./selectionModifiers.ts";
 import { openingsOfWall, wallsOfRoom } from "./roomTree.ts";
 
 const PROBLEM_KINDS: ReadonlySet<LayoutIssue["kind"]> = new Set(["collision", "narrowPassage", "blockedOpening", "outsideRoom", "unknownAsset"]);
@@ -21,7 +22,7 @@ function hasProblem(issues: LayoutIssue[] | undefined): boolean {
 function ItemRow({ item, label, isSelected, issues }: { item: Item; label: string; isSelected: boolean; issues: LayoutIssue[] | undefined }) {
   const dispatchSelection = useEditorStore((state) => state.dispatchSelection);
   const handleClick = (event: MouseEvent): void => {
-    dispatchSelection({ type: event.shiftKey || event.metaKey || event.ctrlKey ? "toggle" : "select", id: item.id });
+    dispatchSelection({ type: isToggleModifier(event) ? "toggle" : "select", id: item.id });
   };
   const hasClamped = (item.clampedParams?.length ?? 0) > 0;
   return (
@@ -106,7 +107,7 @@ export function Tree() {
   if (!document) return null;
   const { rooms, walls, openings } = document.apartment;
   return (
-    <nav className="tree" aria-label={de.panel.label}>
+    <nav className="tree" aria-label={de.panel.treeLabel}>
       <h3 className="caps panel-title">{de.panel.furniture}</h3>
       {items.length === 0 ? (
         <p className="muted tree-empty">{de.panel.noFurniture}</p>

@@ -1,16 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DocumentWriterDeps } from "./documentWriter.ts";
 import { loadDocument } from "./loadScene.ts";
+import type { PlannerDocument } from "./mappers.ts";
 import { useSceneStore } from "./store.ts";
 
 type DocumentSource = Pick<DocumentWriterDeps, "getDocument" | "getAssets" | "applyLocal">;
+
+/** A local apply only goes through for the active document and never replaces a newer version (e.g. one delivered by Realtime meanwhile). */
+export function shouldApplyLocal(storeDocument: PlannerDocument | null, incoming: PlannerDocument): boolean {
+  return storeDocument === null || (storeDocument.id === incoming.id && storeDocument.version <= incoming.version);
+}
 
 /** Reads and writes the active document in the scene store. */
 export function createStoreDocumentSource(): DocumentSource {
   return {
     getDocument: () => useSceneStore.getState().document,
     getAssets: () => [...useSceneStore.getState().assets.values()],
-    applyLocal: (document) => useSceneStore.getState().setSceneData({ document }),
+    applyLocal: (document) => {
+      if (shouldApplyLocal(useSceneStore.getState().document, document)) useSceneStore.getState().setSceneData({ document });
+    },
   };
 }
 

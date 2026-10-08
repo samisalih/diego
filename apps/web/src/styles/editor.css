@@ -33,8 +33,8 @@
   align-items: center;
   gap: 8px;
   padding: 4px 14px;
-  background: rgba(23, 21, 27, .9);
-  border: 1.5px solid rgba(239, 230, 214, .35);
+  background: var(--chip-surface);
+  border: 1.5px solid var(--chip-edge);
   border-radius: var(--radius-pill);
   font: 700 var(--fs-small) / 1.4 var(--sans);
   font-stretch: 80%;
@@ -89,7 +89,7 @@
 }
 .tree-row:hover { background: var(--ink3); }
 .tree-row:focus-visible { outline: 2px solid var(--blue-bright); outline-offset: -2px; }
-.tree-row.is-selected { background: var(--ink3); border-left-color: var(--blue-bright); box-shadow: inset 0 0 12px rgba(63, 109, 255, .25); }
+.tree-row.is-selected { background: var(--ink3); border-left-color: var(--blue-bright); box-shadow: inset 0 0 12px var(--glow-blue-soft); }
 .tree-row.is-hidden .tree-row-label { opacity: .4; text-decoration: line-through; }
 .tree-row.is-estimated { border-left-style: dashed; border-left-color: var(--mustard); }
 .tree-detail { color: var(--text-muted); font-size: var(--fs-small); white-space: nowrap; }
@@ -158,7 +158,7 @@
 }
 @keyframes toast-rise { from { opacity: 0; transform: translateY(8px); } }
 
-.dialog-backdrop { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(11, 10, 13, .72); z-index: 20; }
+.dialog-backdrop { position: fixed; inset: 0; display: grid; place-items: center; background: var(--scrim); z-index: 20; }
 .dialog { width: min(420px, calc(100vw - 32px)); animation: toast-rise 200ms var(--ease-rise); }
 .dialog h2 { margin: 0; color: var(--text-muted); }
 .shortcut-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
@@ -172,7 +172,7 @@ kbd { font: 600 var(--fs-small) / 1 var(--sans); padding: 4px 8px; background: v
   padding: 1px 6px;
   font: 700 12px / 1.3 var(--sans);
   color: var(--cream);
-  background: rgba(11, 10, 13, .72);
+  background: var(--scrim);
   border-radius: 6px;
   white-space: nowrap;
   pointer-events: none;

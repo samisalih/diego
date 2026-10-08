@@ -31,8 +31,10 @@ export function isClick(delta: FloorPoint): boolean {
   return Math.hypot(delta[0], delta[1]) < CLICK_THRESHOLD_M;
 }
 
+/** Snaps to the grid and rounds to the grid's decimals, so 257 * 0.01 gives 2.57 and never 2.5700000000000003; no negative zero. */
 function snap(value: number, step: number): number {
-  return Math.round(value / step) * step;
+  const decimals = Math.max(0, Math.round(-Math.log10(step)));
+  return Number((Math.round(value / step) * step).toFixed(decimals)) || 0;
 }
 
 /** Position patches for the selected, unlocked items; the resulting position is snapped, not the delta. */

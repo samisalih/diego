@@ -1,9 +1,10 @@
 import { DEGREES_TO_RADIANS, type Asset, type Item, type Material } from "@app/core";
 import { memo, useEffect, useMemo, useRef } from "react";
-import type { Mesh, Object3D } from "three";
+import type { Mesh } from "three";
 import { buildItemParts, type ItemPart } from "./build/items.ts";
 import { buildPartGeometry } from "./build/parts.ts";
 import { GeometryCache } from "./geometryCache.ts";
+import { getItemGroup, registerItemGroup } from "./itemGroups.ts";
 import { useOutlineTargets } from "./outlineTargets.ts";
 import { SurfaceMaterial } from "./Surfaces.tsx";
 import type { ItemPointerHandlers } from "./useItemInteraction.ts";
@@ -15,13 +16,12 @@ type ItemMeshesProps = {
   materials: ReadonlyMap<string, Material>;
   cache: GeometryCache;
   handlers: ItemPointerHandlers | null;
-  registerGroup: (itemId: string, group: Object3D | null) => void;
 };
 
-const ItemMeshes = memo(function ItemMeshes({ item, parts, materials, cache, handlers, registerGroup }: ItemMeshesProps) {
+const ItemMeshes = memo(function ItemMeshes({ item, parts, materials, cache, handlers }: ItemMeshesProps) {
   return (
     <group
-      ref={(group) => registerGroup(item.id, group)}
+      ref={(group) => registerItemGroup(item.id, group)}
       position={[item.x, 0, item.z]}
       rotation={[0, item.rotation * DEGREES_TO_RADIANS, 0]}
       onPointerDown={handlers ? (event) => handlers.onPointerDown(item, event) : undefined}
@@ -50,9 +50,9 @@ function partsKey(item: Item): string {
   return `${item.assetId}|${item.hidden}|${JSON.stringify(item.params)}`;
 }
 
-function meshesOf(groups: Map<string, Object3D>, ids: readonly string[]): Mesh[] {
+function meshesOf(ids: readonly string[]): Mesh[] {
   const meshes: Mesh[] = [];
-  for (const id of ids) groups.get(id)?.traverse((object) => (object as Mesh).isMesh && meshes.push(object as Mesh));
+  for (const id of ids) getItemGroup(id)?.traverse((object) => (object as Mesh).isMesh && meshes.push(object as Mesh));
   return meshes;
 }
 
@@ -77,7 +77,6 @@ export function ItemsMeshes({ items: itemsInput, assets, materials, selectedIds 
   const cache = useMemo(() => new GeometryCache(), []);
   const partsById = useRef(new Map<string, PartsEntry>());
   const nextSerial = useRef(0);
-  const groups = useRef(new Map<string, Object3D>());
   const setTargets = useOutlineTargets((state) => state.setTargets);
 
   const itemsWithParts = useMemo(() => {
@@ -95,14 +94,6 @@ export function ItemsMeshes({ items: itemsInput, assets, materials, selectedIds 
     return result;
   }, [items, assets]);
 
-  const registerGroup = useMemo(
-    () => (itemId: string, group: Object3D | null) => {
-      if (group) groups.current.set(itemId, group);
-      else groups.current.delete(itemId);
-    },
-    [],
-  );
-
   useEffect(() => {
     const keysInUse = new Set(itemsWithParts.flatMap(({ parts }) => parts.map((part) => part.geometryKey)));
     cache.retainOnly(keysInUse);
@@ -112,14 +103,14 @@ export function ItemsMeshes({ items: itemsInput, assets, materials, selectedIds 
   // A new serial exactly when an item's meshes were rebuilt.
   const partsSignature = itemsWithParts.map(({ serial }) => serial).join(",");
   useEffect(() => {
-    setTargets(meshesOf(groups.current, selectedIds), meshesOf(groups.current, flaggedIds));
+    setTargets(meshesOf(selectedIds), meshesOf(flaggedIds));
   }, [selectedIds, flaggedIds, setTargets, partsSignature]);
   useEffect(() => () => setTargets([], []), [setTargets]);
 
   return (
     <group>
       {itemsWithParts.map(({ item, parts }) => (
-        <ItemMeshes key={item.id} item={item} parts={parts} materials={materials} cache={cache} handlers={handlers ?? null} registerGroup={registerGroup} />
+        <ItemMeshes key={item.id} item={item} parts={parts} materials={materials} cache={cache} handlers={handlers ?? null} />
       ))}
     </group>
   );

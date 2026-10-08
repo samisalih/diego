@@ -2,6 +2,7 @@ import { polygonArea, wallLength, type Asset, type AssetParam, type Item, type L
 import { useSceneStore } from "../data/store.ts";
 import type { PlannerDocument } from "../data/mappers.ts";
 import { de } from "../i18n/de.ts";
+import { REFUSED_EDIT, type EditorCommands } from "./commands.ts";
 import { useEditorCommands } from "./EditorContext.tsx";
 import { useEditorStore } from "./editorStore.ts";
 import { FactList, LedCheckbox, NumberField, SliderField, TextField } from "./fields.tsx";
@@ -26,14 +27,17 @@ function namesById(document: PlannerDocument, items: Item[], assets: ReadonlyMap
 }
 
 function IssueList({ issues, names, forId }: { issues: LayoutIssue[]; names: Map<string, string>; forId: string }) {
-  const texts = issues.map((issue) => formatIssue(issue, names, forId)).filter((text): text is string => text !== null);
-  if (texts.length === 0) return null;
+  const entries = issues.flatMap((issue, index) => {
+    const text = formatIssue(issue, names, forId);
+    return text === null ? [] : [{ key: `${issue.kind}:${issue.subjectId}:${issue.objectId ?? ""}:${index}`, text }];
+  });
+  if (entries.length === 0) return null;
   return (
     <section className="inspector-section">
       <h3 className="caps panel-title">{de.inspector.issues}</h3>
       <ul className="issue-list">
-        {texts.map((text) => (
-          <li key={text}><span className="dot-red" aria-hidden="true" />{text}</li>
+        {entries.map(({ key, text }) => (
+          <li key={key}><span className="dot-red" aria-hidden="true" />{text}</li>
         ))}
       </ul>
     </section>
@@ -67,6 +71,13 @@ function ParamFields({ item, asset }: { item: Item; asset: Asset }) {
   );
 }
 
+/** An empty name falls back to the asset name (null); a name of only blanks is refused. */
+function commitItemName(commands: EditorCommands, itemId: string, name: string) {
+  const trimmed = name.trim();
+  if (name !== "" && trimmed === "") return Promise.resolve(REFUSED_EDIT);
+  return commands.updateItem(itemId, { name: trimmed === "" ? null : trimmed });
+}
+
 function ItemInspector({ item, names }: { item: Item; names: Map<string, string> }) {
   const commands = useEditorCommands();
   const assets = useSceneStore((state) => state.assets);
@@ -75,7 +86,7 @@ function ItemInspector({ item, names }: { item: Item; names: Map<string, string>
   return (
     <div className="inspector-body">
       <section className="inspector-section">
-        <TextField label={de.inspector.name} value={item.name ?? ""} placeholder={asset?.name} onCommit={(name) => commands.updateItem(item.id, { name: name.trim() === "" ? null : name })} />
+        <TextField label={de.inspector.name} value={item.name ?? ""} placeholder={asset?.name} onCommit={(name) => commitItemName(commands, item.id, name)} />
         <NumberField label={de.inspector.positionX} value={item.x} step={POSITION_STEP_M} unit={de.inspector.unitMetres} disabled={item.locked} onCommit={(x) => commands.updateItem(item.id, { x })} />
         <NumberField label={de.inspector.positionZ} value={item.z} step={POSITION_STEP_M} unit={de.inspector.unitMetres} disabled={item.locked} onCommit={(z) => commands.updateItem(item.id, { z })} />
         <NumberField label={de.inspector.rotation} value={item.rotation} step={ROTATION_STEP_DEG} unit={de.inspector.unitDegrees} disabled={item.locked} onCommit={(rotation) => commands.updateItem(item.id, { rotation })} />
@@ -121,7 +132,7 @@ function FocusInspector({ document, focusId }: { document: PlannerDocument; focu
         facts={[
           [de.inspector.wallLength, metres(wallLength(wall))],
           [de.inspector.wallThickness, metres(wall.thickness)],
-          [de.inspector.openingType, wall.exterior ? de.inspector.wallExterior : de.inspector.wallInterior],
+          [de.inspector.wallKind, wall.exterior ? de.inspector.wallExterior : de.inspector.wallInterior],
           [de.inspector.estimated, yesNo(wall.estimated)],
         ]}
       />
@@ -170,5 +181,5 @@ export function Inspector() {
   else if (only) content = <ItemInspector item={only} names={namesById(document, items, assets)} />;
   else if (selection.focusId !== null) content = <FocusInspector document={document} focusId={selection.focusId} />;
   else content = <DocumentSummary document={document} />;
-  return <section className="inspector" aria-label={de.panel.label}>{content}</section>;
+  return <section className="inspector" aria-label={de.panel.inspectorLabel}>{content}</section>;
 }

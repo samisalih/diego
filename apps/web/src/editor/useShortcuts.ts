@@ -24,6 +24,8 @@ export function useShortcuts(commands: EditorCommands): void {
       showShortcuts: () => editor.setShortcutDialogOpen(true),
     });
     const handleKeyDown = (event: KeyboardEvent): void => {
+      // Holding a key must not repeat a write (one revision per press).
+      if (event.repeat) return;
       const shortcut = matchShortcut(
         { key: event.key, metaKey: event.metaKey, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey, altKey: event.altKey, target: event.target as HTMLElement | null },
         registry,
