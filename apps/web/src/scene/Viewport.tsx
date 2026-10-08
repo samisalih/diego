@@ -2,13 +2,14 @@ import { Canvas } from "@react-three/fiber";
 import { ContactShadows, PerformanceMonitor } from "@react-three/drei";
 import { useEffect, useMemo, useState } from "react";
 import { useSceneStore } from "../data/store.ts";
-import { installFrameStats } from "../dev/frameStats.ts";
+import { installFrameStats, markFrameEvent } from "../dev/frameStats.ts";
 import { ApartmentMeshes } from "./Apartment.tsx";
 import { apartmentBounds, type CameraSetup } from "./build/framing.ts";
 import { initialCamera } from "./build/initialCamera.ts";
 import { lightingLevels, sunSetup } from "./build/sun.ts";
 import { DollhouseControls } from "./DollhouseControls.tsx";
 import { Effects } from "./Effects.tsx";
+import { RenderWarmup } from "./RenderWarmup.tsx";
 import { Ground } from "./Ground.tsx";
 import { ItemsMeshes } from "./Items.tsx";
 import { QUALITY_LEVELS, useQualityLevel, useQualityStore } from "./quality.ts";
@@ -83,6 +84,7 @@ function SceneContent({ cameraSetup }: { cameraSetup: CameraSetup }) {
         frames={1}
       />
       <DollhouseControls bounds={bounds} camera={cameraSetup} />
+      <RenderWarmup shadowKey={[document.items, apartment, assets, sun, levels.sunIntensity, shadowMapSize]} />
     </>
   );
 }
@@ -103,7 +105,10 @@ function WarmedUpMonitor() {
   const settle = useQualityStore((state) => state.settle);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsWarm(true), MONITOR_WARMUP_MS);
+    const timer = setTimeout(() => {
+      if (import.meta.env.DEV) markFrameEvent("monitor on");
+      setIsWarm(true);
+    }, MONITOR_WARMUP_MS);
     return () => clearTimeout(timer);
   }, []);
 
@@ -116,7 +121,17 @@ export function Viewport() {
   const { dpr } = useQualityLevel();
   const camera = useInitialCamera();
 
-  useEffect(() => (import.meta.env.DEV ? installFrameStats(() => useQualityStore.getState().levelIndex) : undefined), []);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const stopStats = installFrameStats(() => useQualityStore.getState().levelIndex);
+    const stopQualityMarks = useQualityStore.subscribe((state) => markFrameEvent(`quality level ${state.levelIndex}`));
+    const stopSceneMarks = useSceneStore.subscribe(() => markFrameEvent("scene store changed"));
+    return () => {
+      stopStats();
+      stopQualityMarks();
+      stopSceneMarks();
+    };
+  }, []);
 
   return (
     <Canvas
