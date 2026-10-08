@@ -8,6 +8,7 @@ import {
   restoreItemsToContent,
   updateItems,
 } from "../src/operations/items.ts";
+import { setDocumentName } from "../src/index.ts";
 import { setLighting } from "../src/operations/lighting.ts";
 import { replaceMaterialInAsset, upsertAssetDefinition } from "../src/operations/asset.ts";
 import type { Asset } from "../src/schemas/asset.ts";
@@ -631,5 +632,44 @@ describe("placeItems and updateItems hardening", () => {
   it("placeItems rejects an id that already exists in the document", () => {
     const result = placeItems(buildContent(), [{ id: "item_sofa_1", assetId: "asset_sofa", x: 1, z: 1 }], buildAssets());
     expect(result.ok).toBe(false);
+  });
+});
+
+// Contract: docs/specs/editor.md section 4.2 - setDocumentName(content, name), name length 1..120.
+// Assumption: changedIds is empty (the document name belongs to no entity id).
+describe("setDocumentName", () => {
+  // Red when the name is not written, or other content parts are touched.
+  it("sets the name and leaves everything else untouched", () => {
+    const content = buildContent();
+    const result = expectOk(setDocumentName(content, "Neue Wohnung"));
+    expect(result.value.name).toBe("Neue Wohnung");
+    expect(result.value.apartment).toEqual(content.apartment);
+    expect(result.value.items).toEqual(content.items);
+    expect(result.value.lighting).toEqual(content.lighting);
+  });
+
+  // Red when the input content is mutated instead of copied.
+  it("does not mutate the input content", () => {
+    const content = deepFreeze(buildContent());
+    expect(() => setDocumentName(content, "Andere")).not.toThrow();
+  });
+
+  // Red when the length bounds are off by one (1 and 120 are valid).
+  it("accepts names of 1 and 120 characters", () => {
+    expect(expectOk(setDocumentName(buildContent(), "a")).value.name).toBe("a");
+    expect(expectOk(setDocumentName(buildContent(), "b".repeat(120))).value.name).toHaveLength(120);
+  });
+
+  // Red when an empty or too long name is accepted.
+  it("rejects an empty name and a name of 121 characters with a structured issue on the name field", () => {
+    for (const name of ["", "c".repeat(121)]) {
+      const [issue] = expectIssues(setDocumentName(buildContent(), name));
+      expect(issue).toEqual({
+        field: expect.stringContaining("name"),
+        value: expect.anything(),
+        allowed: expect.any(String),
+        message: expect.any(String),
+      });
+    }
   });
 });

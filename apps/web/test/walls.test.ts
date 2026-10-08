@@ -386,6 +386,145 @@ describe("buildWallGeometry", () => {
     });
   });
 
+  describe("L-joints between walls of unequal thickness (spec editor section 7)", () => {
+    const HEIGHT = 2.5;
+    const makeWall = (id: string, startX: number, startZ: number, endX: number, endZ: number, thickness: number): Wall =>
+      ({ id, startX, startZ, endX, endZ, thickness, exterior: false });
+    // Thick wall a runs east and meets thin wall b at (4, 0), b runs south from there.
+    const thick = makeWall("wall_thick", 0, 0, 4, 0, 0.3);
+    const thin = makeWall("wall_thin", 4, 0, 4, 3, 0.1);
+    const list = [thick, thin];
+
+    // Red if the extension still uses the wall's own thickness (a would end at 4.15) instead of the other wall's half (0.05).
+    it("extends the thick wall by half of the thin wall's thickness", () => {
+      const box = boundsOf(buildWallGeometry(thick, list, [], HEIGHT));
+      expect(box.min.x).toBeCloseTo(0, 5);
+      expect(box.max.x).toBeCloseTo(4.05, 5);
+    });
+
+    // Red if the thin wall is extended by its own half thickness (0.05) instead of the thick wall's half (0.15): the corner would stay open.
+    it("extends the thin wall by half of the thick wall's thickness", () => {
+      const box = boundsOf(buildWallGeometry(thin, list, [], HEIGHT));
+      expect(box.min.z).toBeCloseTo(-0.15, 5);
+      expect(box.max.z).toBeCloseTo(3, 5);
+    });
+
+    // Red if the rule depends on the drawing direction of the walls (end vs start): same corner, thin wall drawn towards the corner.
+    it("applies the same rule to a start point meeting an end point", () => {
+      const reversedThin = makeWall("wall_thin", 4, 3, 4, 0, 0.1);
+      const box = boundsOf(buildWallGeometry(reversedThin, [thick, reversedThin], [], HEIGHT));
+      expect(box.min.z).toBeCloseTo(-0.15, 5);
+      expect(box.max.z).toBeCloseTo(3, 5);
+      const reversedThick = makeWall("wall_thick", 4, 0, 0, 0, 0.3);
+      const thickBox = boundsOf(buildWallGeometry(reversedThick, [reversedThick, thin], [], HEIGHT));
+      expect(thickBox.max.x).toBeCloseTo(4.05, 5);
+      expect(thickBox.min.x).toBeCloseTo(0, 5);
+    });
+
+    // Red if the thin wall's corner square is not covered: both walls together must cover the square around (4, 0).
+    it("closes the corner: the thick wall's side faces reach the thin wall's outer face", () => {
+      const thickBox = boundsOf(buildWallGeometry(thick, list, [], HEIGHT));
+      const thinBox = boundsOf(buildWallGeometry(thin, list, [], HEIGHT));
+      // thin wall outer face at x = 4.05, thick wall outer face at z = -0.15
+      expect(thickBox.max.x).toBeGreaterThanOrEqual(thinBox.max.x - EPS);
+      expect(thinBox.min.z).toBeLessThanOrEqual(thickBox.min.z + EPS);
+    });
+  });
+
+  describe("T-joints (spec editor section 7)", () => {
+    const HEIGHT = 2.5;
+    const through: Wall = { id: "wall_through", startX: 0, startZ: 0, endX: 6, endZ: 0, thickness: 0.3, exterior: true };
+    const makeStub = (id: string, thickness: number): Wall => ({ id, startX: 3, startZ: 3, endX: 3, endZ: 0, thickness, exterior: false });
+
+    // Red if a thin wall meeting a thick wall's centre line is extended by the thick wall's half (0.15) instead of its own half (0.05).
+    it("extends by min(own, other) / 2 when the joining wall is thinner", () => {
+      const stub = makeStub("wall_stub", 0.1);
+      const box = boundsOf(buildWallGeometry(stub, [through, stub], [], HEIGHT));
+      expect(box.min.z).toBeCloseTo(-0.05, 5);
+      expect(box.max.z).toBeCloseTo(3, 5);
+    });
+
+    // Red if a thick wall meeting a thin wall's centre line is extended by its own half (0.25): it would poke through the thin wall.
+    it("extends by min(own, other) / 2 when the joining wall is thicker", () => {
+      const thinThrough: Wall = { ...through, id: "wall_thin_through", thickness: 0.3 };
+      const stub = makeStub("wall_fat_stub", 0.5);
+      const box = boundsOf(buildWallGeometry(stub, [thinThrough, stub], [], HEIGHT));
+      expect(box.min.z).toBeCloseTo(-0.15, 5);
+    });
+
+    // Red if the through-going wall is changed by a wall ending on its centre line.
+    it("does not extend or alter the wall that is joined in the middle", () => {
+      const stub = makeStub("wall_stub", 0.1);
+      const box = boundsOf(buildWallGeometry(through, [through, stub], [], HEIGHT));
+      expect(box.min.x).toBeCloseTo(0, 5);
+      expect(box.max.x).toBeCloseTo(6, 5);
+      expect(box.min.z).toBeCloseTo(-0.15, 5);
+      expect(box.max.z).toBeCloseTo(0.15, 5);
+    });
+  });
+
+  describe("end caps and top faces at joined ends (spec editor section 7)", () => {
+    const HEIGHT = 2.5;
+    const thick: Wall = { id: "wall_thick", startX: 0, startZ: 0, endX: 4, endZ: 0, thickness: 0.3, exterior: false };
+    const thin: Wall = { id: "wall_thin", startX: 4, startZ: 0, endX: 4, endZ: 3, thickness: 0.1, exterior: false };
+    const frame = localFrame(thick);
+    const triangles = getTriangles(buildWallGeometry(thick, [thick, thin], [], HEIGHT));
+
+    const capsAt = (u: number) => triangles.filter((t) => t.positions.every((p) => Math.abs(frame.toLocal(p).u - u) < EPS) && Math.abs(frame.dirToLocal(t.faceNormal).u) > 0.99);
+    const tops = triangles.filter((t) => t.positions.every((p) => Math.abs(p.y - HEIGHT) < EPS) && t.faceNormal.y > 0.99);
+
+    // Red if a cap is generated at the joined end (it would be coplanar with the joined wall's face and z-fight).
+    it("has no end cap at the joined end", () => {
+      const caps = triangles.filter((t) => Math.abs(frame.dirToLocal(t.faceNormal).u) > 0.99 && frame.toLocal(t.centroid).u > 1);
+      expect(caps).toHaveLength(0);
+    });
+
+    // Red if the free end loses its cap (the wall would be open).
+    it("keeps the end cap at the free end", () => {
+      expect(sumArea(capsAt(0))).toBeCloseTo(0.3 * HEIGHT, 4);
+    });
+
+    // Red if the top face continues over the extension at the joined end.
+    it("has no top face over the extension at the joined end", () => {
+      expect(tops.length).toBeGreaterThan(0);
+      for (const t of tops) for (const p of t.positions) expect(frame.toLocal(p).u).toBeLessThanOrEqual(4 + EPS);
+    });
+
+    // Red if the top face is dropped over the main length of the wall or at the free end.
+    it("keeps the top face over the centre-line length", () => {
+      expect(sumArea(tops)).toBeCloseTo(4 * 0.3, 4);
+      expect(Math.min(...tops.flatMap((t) => t.positions.map((p) => frame.toLocal(p).u)))).toBeCloseTo(0, 5);
+    });
+
+    // Red if the side faces are no longer extended (the corner would open on the outside).
+    it("still extends the side faces over the joined end", () => {
+      const front = sideFaces(triangles, thick, 1);
+      expect(sumArea(front)).toBeCloseTo(4.05 * HEIGHT, 4);
+    });
+
+    // Red if the cap logic is applied to seed corners wrongly: the seed's north wall has no caps and no top over its two joined ends.
+    it("has neither caps nor top overhang at both joined ends of the seed's north wall", () => {
+      const north = wallById("wall_north");
+      const northFrame = localFrame(north);
+      const northTriangles = getTriangles(buildWallGeometry(north, walls, openings, CEILING));
+      const halfWidth = north.thickness / 2;
+      const endCaps = northTriangles.filter((t) =>
+        Math.abs(northFrame.dirToLocal(t.faceNormal).u) > 0.99
+        && t.positions.every((p) => {
+          const { u } = northFrame.toLocal(p);
+          return Math.abs(u + halfWidth) < EPS || Math.abs(u - northFrame.length - halfWidth) < EPS;
+        }));
+      expect(endCaps).toHaveLength(0);
+      const northTops = northTriangles.filter((t) => t.positions.every((p) => Math.abs(p.y - CEILING) < EPS) && t.faceNormal.y > 0.99);
+      expect(sumArea(northTops)).toBeCloseTo(northFrame.length * north.thickness, 4);
+      for (const t of northTops) for (const p of t.positions) {
+        const { u } = northFrame.toLocal(p);
+        expect(u).toBeGreaterThanOrEqual(-EPS);
+        expect(u).toBeLessThanOrEqual(northFrame.length + EPS);
+      }
+    });
+  });
+
   describe("openings keep their world position when ends are extended", () => {
     const wall = wallById("wall_north");
     const door = openingById("opening_front_door");
