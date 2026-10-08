@@ -25,7 +25,7 @@ function buildBox(overrides: Record<string, unknown> = {}): PartFixture {
     d: 1,
     bevel: 0,
     ...overrides,
-  } as PartFixture;
+  } as unknown as PartFixture;
 }
 
 function buildAssetWith(parts: PartFixture[]): AssetFixture {
