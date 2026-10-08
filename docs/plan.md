@@ -262,7 +262,7 @@ app_state (                          -- exactly one row, id = 1
   they are ready the renderer uses the fallback colour.
 - **`meta.longitude` + `meta.timeZone`** in the apartment: needed to turn "19 Uhr im Winter" (local
   wall-clock time incl. DST) into the correct sun position.
-- **Owner**: the first account created becomes the owner automatically (trigger on `auth.users`).
+- **Owner**: registered once explicitly by email in `private.owner` (no "first sign-up wins").
 
 ### 4.3 jsonb shapes
 

@@ -41,7 +41,21 @@ Environment variables (`apps/web/.env.local`, never committed):
 
 The Supabase project is managed through the Supabase MCP (`.mcp.json`, git-ignored because it holds an
 access token). Migrations in `supabase/migrations` are the source of truth and are applied through it.
-Sign-ups are disabled; the first account created in the dashboard becomes the owner automatically.
+
+### Owner account
+
+The app has exactly one user. Every table is locked to that owner by RLS.
+
+1. Dashboard → Authentication → Sign In / Providers: turn **off** "Allow new users to sign up".
+2. Dashboard → Authentication → Users → "Add user": create your account (email + password).
+3. Register it as owner once (SQL editor, or ask Claude through the Supabase MCP):
+
+   ```sql
+   insert into private.owner (user_id)
+   select id from auth.users where email = '<your email>';
+   ```
+
+Until step 3 has run, nobody — including you — can read or write any data.
 
 ## Scripts
 

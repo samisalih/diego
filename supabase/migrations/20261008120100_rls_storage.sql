@@ -3,8 +3,9 @@
 
 create schema if not exists private;
 
--- Single row holding the owner's auth user id. Filled automatically by the first account
--- (see claim_first_owner at the end of this file).
+-- Single row holding the owner's auth user id. Set once, explicitly, after the owner account exists
+-- (see README, "Owner account"). Deliberately no automatic "first sign-up wins": a hosted project
+-- allows sign-ups by default, so a stranger could otherwise become owner.
 create table if not exists private.owner (
   id boolean primary key default true check (id),
   user_id uuid not null
@@ -117,30 +118,3 @@ create policy "planner_objects_delete_owner" on storage.objects
     bucket_id in ('thumbnails', 'reference-images', 'textures', 'models', 'photos')
     and (select private.is_owner())
   );
-
--- The first account ever created becomes the owner. Sign-ups are disabled, so that account is the
--- one created by hand in the dashboard; later accounts never gain access.
-create function private.claim_first_owner()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  insert into private.owner (user_id)
-  select new.id
-  where not exists (select 1 from private.owner);
-  return new;
-end;
-$$;
-
-revoke all on function private.claim_first_owner() from public, anon, authenticated;
-
-create trigger on_auth_user_created_claim_owner
-  after insert on auth.users
-  for each row execute function private.claim_first_owner();
-
--- Covers an owner account that already existed before this migration ran.
-insert into private.owner (user_id)
-select id from auth.users order by created_at limit 1
-on conflict do nothing;

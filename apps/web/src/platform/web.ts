@@ -1,4 +1,4 @@
-import type { PickedFile, Platform } from "./types";
+import type { PickedFile, Platform } from "./types.ts";
 
 const CACHE_PREFIX = "apartment-planner:";
 const ALLOWED_LINK_PROTOCOLS = ["http:", "https:", "mailto:"];
