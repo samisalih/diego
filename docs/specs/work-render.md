@@ -70,7 +70,10 @@ SceneData = {
 }
 ```
 
-Pure reducer functions (exported and tested without zustand):
+Pure reducer functions (exported and tested without zustand). They take raw snake_case DB rows
+(as delivered by Realtime) and map them internally; delete events carry only `{ id }`. The mappers
+return `null` for soft-deleted rows. `RowValidationError` has `rowId` and `issues` (core validation
+issues).
 - `applyDocumentChange(state, change)` — `change = { type: "upsert" | "delete", row }`. Upsert replaces
   the active document only if `row.id === state.appState.activeDocumentId` and `row.version >=
   current.version` (stale events are ignored). Soft delete (`deleted_at` set) or delete of the active
@@ -158,7 +161,8 @@ centred on the origin (position and rotation are applied by the caller):
 - `torus`: ring in the x/z plane, outer extent `w × d`, tube radius `tube ?? h/2`;
 - `plane`: `w × d` rectangle, normal `+y`, at the box centre;
 - `cushion`: rounded box with radius `min(bevel, …)` whose top and bottom faces bulge outwards by
-  `fill · min(h, 0.1) / 2` (default `fill` 0.5);
+  `fill · min(h, 0.1) / 2` (default `fill` 0.5); the bulge lies outside the `h` box, so the geometry's
+  height is `h + fill · min(h, 0.1)` (accepted: it is visual only, layout checks use the resolved box);
 - `lathe`: lathe of `profile` (`[radius, y]`, y from 0 at the part bottom to `h` at the top) around y,
   shifted by `−h/2` so it is centred;
 - `extrude`: closed `[x, y]` outline extruded along z by `d`, centred in z;
