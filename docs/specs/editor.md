@@ -240,8 +240,9 @@ Replace the "half of its own thickness" rule (work-render spec §4.1):
 - L-joint (two wall **end points** meet): each end is extended by half the **other** wall's thickness.
 - T-joint (an end lies on another wall's centre line, not at its end): the end is extended by
   `min(own, other) / 2`.
-- End caps and the top face over the extension are not generated at joined ends (avoids coplanar faces
-  with the joined wall); free ends keep their caps.
+- End caps are not generated at joined ends (a cap there would be coplanar with the joined wall's side
+  face); free ends keep their caps. The top face **is** extended over the extension, so the corner has no
+  hole when seen from above (overlapping coplanar tops inside the joint are accepted).
 Update the phase b spec section accordingly; tests in `walls.test.ts`.
 
 ---
