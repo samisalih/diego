@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { useEditorStore } from "./editorStore.ts";
-import { insetsFor, NARROW_WINDOW_PX } from "./layoutMetrics.ts";
-
-const NARROW_QUERY = `(max-width: ${NARROW_WINDOW_PX - 1}px)`;
+import { insetsFor, NARROW_QUERY } from "./layoutMetrics.ts";
 
 export type PanelLayout = {
   isNarrow: boolean;

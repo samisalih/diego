@@ -8,6 +8,7 @@ export const TOP_RESERVE_PX = 60;
 export const COLLAPSED_BUTTON_PX = 40;
 /** Below this window width the panels can be collapsed (and start collapsed). */
 export const NARROW_WINDOW_PX = 1100;
+export const NARROW_QUERY = `(max-width: ${NARROW_WINDOW_PX - 1}px)`;
 
 export type Insets = { left: number; right: number; top: number };
 

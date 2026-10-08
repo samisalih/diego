@@ -5,7 +5,7 @@ import { placeItemGroup } from "./itemGroups.ts";
 
 const CLICK_DISTANCE_PX = 4;
 /** The layout check, shadow bake and annotations follow the drag at this rate; the item itself moves every frame. */
-const PREVIEW_PUSH_INTERVAL_MS = 66;
+export const PREVIEW_PUSH_INTERVAL_MS = 66;
 
 export type PressSessionOptions = {
   pointerId: number;
@@ -26,6 +26,9 @@ function toPreview(patches: ItemPatch[]): DragPreview {
   return new Map(patches.map((patch) => [patch.id, { x: patch.x ?? 0, z: patch.z ?? 0 }]));
 }
 
+/** Counts started presses, so the cleanup of a finished drag does not touch a newer one. */
+let latestSession = 0;
+
 /**
  * One press on an item from pointer down to its end: a click, a drag that commits once, or an abort.
  * Every exit path (release, cancel, lost capture, window blur, buttons released elsewhere) goes through
@@ -33,6 +36,7 @@ function toPreview(patches: ItemPatch[]): DragPreview {
  */
 export function startPressSession(options: PressSessionOptions): void {
   const { drag } = options;
+  const session = ++latestSession;
   let latest: PointerEvent | null = null;
   let frame = 0;
   let lastPushAt = -Infinity;
@@ -63,8 +67,8 @@ export function startPressSession(options: PressSessionOptions): void {
   const removeListeners = (): void => {
     window.removeEventListener("pointermove", handleMove);
     window.removeEventListener("pointerup", handleUp);
-    window.removeEventListener("pointercancel", abort);
-    window.removeEventListener("lostpointercapture", abort);
+    window.removeEventListener("pointercancel", abortPointer);
+    window.removeEventListener("lostpointercapture", abortPointer);
     window.removeEventListener("blur", abort);
   };
 
@@ -79,6 +83,10 @@ export function startPressSession(options: PressSessionOptions): void {
     end();
     options.setPreview(null);
     if (isDragging) options.restoreGroups();
+  }
+
+  function abortPointer(pointer: PointerEvent): void {
+    if (pointer.pointerId === options.pointerId) abort();
   }
 
   function handleMove(pointer: PointerEvent): void {
@@ -99,6 +107,7 @@ export function startPressSession(options: PressSessionOptions): void {
     if (patches) {
       options.setPreview(toPreview(patches));
       void options.commitMove(patches).finally(() => {
+        if (session !== latestSession) return;
         options.setPreview(null);
         options.restoreGroups();
       });
@@ -112,7 +121,7 @@ export function startPressSession(options: PressSessionOptions): void {
 
   window.addEventListener("pointermove", handleMove);
   window.addEventListener("pointerup", handleUp);
-  window.addEventListener("pointercancel", abort);
-  window.addEventListener("lostpointercapture", abort);
+  window.addEventListener("pointercancel", abortPointer);
+  window.addEventListener("lostpointercapture", abortPointer);
   window.addEventListener("blur", abort);
 }

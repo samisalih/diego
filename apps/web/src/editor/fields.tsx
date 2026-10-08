@@ -16,6 +16,7 @@ export function TextField({ label, value, placeholder, disabled, onCommit }: { l
   const input = useRef<HTMLInputElement>(null);
   const valueNow = useRef(value);
   valueNow.current = value;
+  const textAtFocus = useRef(value);
 
   useEffect(() => {
     if (input.current && document.activeElement !== input.current) input.current.value = value;
@@ -36,12 +37,18 @@ export function TextField({ label, value, placeholder, disabled, onCommit }: { l
         defaultValue={value}
         placeholder={placeholder}
         disabled={disabled}
+        onFocus={(event) => {
+          textAtFocus.current = event.currentTarget.value;
+        }}
         onKeyDown={(event) => {
           if (event.key === "Escape") restore();
           if (event.key === "Enter" || event.key === "Escape") event.currentTarget.blur();
         }}
         onBlur={(event) => {
-          if (event.currentTarget.value === valueNow.current) return;
+          if (event.currentTarget.value === textAtFocus.current) {
+            restore();
+            return;
+          }
           void onCommit(event.currentTarget.value).then((result) => {
             if (!result.ok) restore();
           });
@@ -63,6 +70,7 @@ function CommitNumberInput({ id, ariaLabel, value, step, disabled, onCommit }: C
   const shown = roundForDisplay(value);
   const shownNow = useRef(shown);
   shownNow.current = shown;
+  const textAtFocus = useRef(shown);
 
   useEffect(() => {
     if (input.current && document.activeElement !== input.current) input.current.value = shown;
@@ -82,12 +90,18 @@ function CommitNumberInput({ id, ariaLabel, value, step, disabled, onCommit }: C
       step={step}
       defaultValue={shown}
       disabled={disabled}
+      onFocus={(event) => {
+        textAtFocus.current = event.currentTarget.value;
+      }}
       onKeyDown={(event) => {
         if (event.key === "Escape") restore();
         if (event.key === "Enter" || event.key === "Escape") event.currentTarget.blur();
       }}
       onBlur={(event) => {
-        if (event.currentTarget.value === shownNow.current) return;
+        if (event.currentTarget.value === textAtFocus.current) {
+          restore();
+          return;
+        }
         const typed = event.currentTarget.valueAsNumber;
         if (Number.isNaN(typed) || typed === value) {
           restore();

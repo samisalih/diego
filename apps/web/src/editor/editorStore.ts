@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { insetsFor, type Insets } from "./layoutMetrics.ts";
+import { insetsFor, NARROW_QUERY, type Insets } from "./layoutMetrics.ts";
 import { EMPTY_SELECTION, selectionReducer, type SelectionAction, type SelectionState } from "./selection.ts";
 
 /** Live positions of items while they are dragged; only the preview, nothing is written. */
@@ -29,6 +29,10 @@ type EditorActions = {
 
 let nextToastId = 1;
 
+function isNarrowWindow(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(NARROW_QUERY).matches;
+}
+
 export function isSameSelection(a: SelectionState, b: SelectionState): boolean {
   return a.focusId === b.focusId && a.selectedIds.length === b.selectedIds.length && a.selectedIds.every((id, index) => id === b.selectedIds[index]);
 }
@@ -39,7 +43,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set) => ({
   dragPreview: null,
   toast: null,
   isShortcutDialogOpen: false,
-  insets: insetsFor({ isLeftOpen: true, isRightOpen: true }),
+  insets: insetsFor({ isLeftOpen: !isNarrowWindow(), isRightOpen: !isNarrowWindow() }),
   dispatchSelection: (action) =>
     set((state) => {
       const next = selectionReducer(state.selection, action);

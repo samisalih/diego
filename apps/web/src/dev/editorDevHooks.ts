@@ -1,5 +1,6 @@
 import { useSceneStore } from "../data/store.ts";
 import { useEditorStore } from "../editor/editorStore.ts";
+import { PREVIEW_PUSH_INTERVAL_MS } from "../scene/dragSession.ts";
 import { placeItemGroup, placeItemGroupsFromItems } from "../scene/itemGroups.ts";
 
 const SIMULATION_START_DELAY_MS = 7000;
@@ -7,7 +8,6 @@ const SIMULATION_DURATION_MS = 8000;
 const SIMULATION_RADIUS_M = 0.6;
 const SIMULATION_LAPS = 3;
 const SIMULATION_SAMPLES = 400;
-const PREVIEW_PUSH_INTERVAL_MS = 66;
 
 type SimulationResult = { frames: number; medianMs: number; p95Ms: number; qualityLevel: number };
 

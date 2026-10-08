@@ -53,10 +53,15 @@ export function useSelectionSync(client: SupabaseClient | null): void {
       const local = useEditorStore.getState().selection;
       const remote = selectionOfAppState();
       if (remote && isSameSelection(local, remote)) return;
-      awaitedEchoes.push(keyOf(local));
+      const echoKey = keyOf(local);
+      awaitedEchoes.push(echoKey);
       if (awaitedEchoes.length > MAX_REMEMBERED_ECHOES) awaitedEchoes.shift();
       const { error } = await client.from("app_state").update({ selection: local.selectedIds, focus_id: local.focusId }).eq("id", APP_STATE_ROW_ID);
-      if (error) console.error("Writing the selection failed", error);
+      if (error) {
+        const index = awaitedEchoes.lastIndexOf(echoKey);
+        if (index >= 0) awaitedEchoes.splice(index, 1);
+        console.error("Writing the selection failed", error);
+      }
     };
 
     const stopLocal = useEditorStore.subscribe((state, previous) => {
