@@ -10,15 +10,22 @@
   },
   "dependencies": {
     "@app/core": "workspace:*",
+    "@react-three/drei": "10.7.9",
+    "@react-three/fiber": "9.8.1",
+    "@react-three/postprocessing": "3.1.3",
     "@supabase/supabase-js": "2.117.2",
+    "n8ao": "2.0.1",
+    "postprocessing": "6.39.5",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-router": "8.4.0",
+    "three": "0.186.1",
     "zustand": "5.0.15"
   },
   "devDependencies": {
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/three": "0.186.0",
     "@vitejs/plugin-react": "6.1.2",
     "jsdom": "30.1.2",
     "vite": "8.3.3"
